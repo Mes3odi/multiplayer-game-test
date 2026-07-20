@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Firebase Multiplayer Test with Chat</title>
+    <title>GitHub Firebase Multiplayer Game with Custom Images</title>
     <style>
         html, body {
             margin: 0;
@@ -19,38 +19,49 @@
             justify-content: center;
             overflow: hidden;
         }
-        #info {
-            margin-bottom: 5px;
+        #top-bar {
+            margin-bottom: 8px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
             font-size: 13px;
             color: #aaa;
-            text-align: center;
         }
+        #name-input, #image-input {
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            outline: none;
+        }
+        #name-input { width: 120px; }
         canvas {
             background: #222;
             border: 2px solid #555;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
             display: block;
         }
-        /* Chat Box Styling */
         #chat-container {
             width: 800px;
-            margin-top: 10px;
+            margin-top: 8px;
             background: #1a1a1a;
             border: 2px solid #444;
             border-radius: 4px;
             display: flex;
             flex-direction: column;
-            height: 120px;
+            height: 100px;
         }
         #chat-messages {
             flex: 1;
-            padding: 8px;
+            padding: 6px 8px;
             overflow-y: auto;
             font-size: 12px;
             color: #ddd;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
         }
         #chat-form {
             display: flex;
@@ -60,7 +71,7 @@
             flex: 1;
             background: #111;
             border: none;
-            padding: 8px;
+            padding: 6px 8px;
             color: #fff;
             font-size: 12px;
             outline: none;
@@ -69,21 +80,26 @@
             background: #444;
             color: #fff;
             border: none;
-            padding: 0 15px;
+            padding: 0 12px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 12px;
         }
-        #chat-send:hover {
-            background: #555;
-        }
+        #chat-send:hover { background: #555; }
     </style>
 </head>
 <body>
 
-    <div id="info">Use <b>WASD</b> or <b>Arrow Keys</b> to move. Chat messages are saved forever!</div>
-    <canvas id="gameCanvas" width="800" height="480"></canvas>
+    <div id="top-bar">
+        <span>Name:</span>
+        <input type="text" id="name-input" value="Player" maxlength="12">
+        <span>Avatar Image URL:</span>
+        <input type="text" id="image-input" placeholder="Paste direct image link here (optional)">
+        <span>| Use WASD to move</span>
+    </div>
 
-    <!-- Chat Box UI -->
+    <canvas id="gameCanvas" width="800" height="440"></canvas>
+
     <div id="chat-container">
         <div id="chat-messages"></div>
         <form id="chat-form">
@@ -91,6 +107,11 @@
             <button type="submit" id="chat-send">Send</button>
         </form>
     </div>
+
+    <!-- Load Game Script as a Module -->
+    <script type="module" src="game.js"></script>
+</body>
+</html>
 
     <!-- Load Game Script as a Module -->
     <script type="module" src="game.js"></script>
