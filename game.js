@@ -32,6 +32,7 @@ const cinemaScreen = document.getElementById('cinema-screen');
 const cinemaControls = document.getElementById('cinema-controls');
 const ytInput = document.getElementById('yt-input');
 const ytSetBtn = document.getElementById('yt-set-btn');
+const ytIframe = document.getElementById('yt-iframe');
 
 // Unique ID for this browser session
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
@@ -51,31 +52,13 @@ let myData = {
 let allPlayers = {};
 const loadedImages = {};
 
-// --- YOUTUBE API SYNC LOGIC ---
-let ytPlayer = null;
-let currentSyncedVideoId = "";
-let videoStartTime = 0;
-
-// This function is automatically called by YouTube's API script when it loads
-window.onYouTubeIframeAPIReady = function() {
-    ytPlayer = new YT.Player('youtube-player', {
-        height: '100%',
-        width: '100%',
-        videoId: '',
-        playerVars: {
-            'autoplay': 1,
-            'controls': 1
-        }
-    });
-};
-
+// --- STABLE IFRAME SYNC LOGIC ---
 const cinemaRef = ref(db, 'cinema');
 
 ytSetBtn.addEventListener('click', () => {
     let url = ytInput.value.trim();
     let videoId = extractYouTubeId(url);
     if (videoId) {
-        // Save both video ID and precise server timestamp so everyone syncs instantly
         set(cinemaRef, {
             videoId: videoId,
             startedAt: Date.now()
@@ -86,22 +69,12 @@ ytSetBtn.addEventListener('click', () => {
     }
 });
 
-// Listen to cinema updates in Firebase
 onValue(cinemaRef, (snapshot) => {
     let data = snapshot.val();
     if (data && data.videoId) {
-        currentSyncedVideoId = data.videoId;
-        videoStartTime = data.startedAt || Date.now();
-
-        // Calculate exact playback position accounting for network delay
-        let elapsedSeconds = (Date.now() - videoStartTime) / 1000;
-
-        if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-            ytPlayer.loadVideoById({
-                videoId: currentSyncedVideoId,
-                startSeconds: elapsedSeconds
-            });
-        }
+        let elapsedSeconds = Math.floor((Date.now() - (data.startedAt || Date.now())) / 1000);
+        // Load video directly with start parameter for precise syncing across devices
+        ytIframe.src = `https://www.youtube.com/embed/${data.videoId}?autoplay=1&start=${elapsedSeconds}`;
     }
 });
 
@@ -110,7 +83,7 @@ function extractYouTubeId(url) {
     let match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
 }
-// -----------------------------
+// -------------------------------
 
 // Keyboard tracking with input block guard
 const keys = {};
@@ -154,15 +127,6 @@ btnCinema.addEventListener('click', () => {
     cinemaScreen.style.display = "block";
     cinemaControls.style.display = "block";
     set(myPlayerRef, myData);
-
-    // Instantly sync video position when walking into the cinema room
-    if (ytPlayer && typeof ytPlayer.loadVideoById === 'function' && currentSyncedVideoId) {
-        let elapsedSeconds = (Date.now() - videoStartTime) / 1000;
-        ytPlayer.loadVideoById({
-            videoId: currentSyncedVideoId,
-            startSeconds: elapsedSeconds
-        });
-    }
 });
 
 // --- CHAT SYSTEM LOGIC ---
