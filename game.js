@@ -14,20 +14,18 @@ const firebaseConfig = {
     measurementId: "G-MXZMBNWZ8B"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Canvas & UI Setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const viewport = document.getElementById("viewport");
+const mapContainer = document.getElementById("map-container");
 
 const nameInput = document.getElementById('name-input');
 nameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
 const imageInput = document.getElementById('image-input');
 
-// Unique ID for this browser session
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
 const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
 
@@ -37,20 +35,46 @@ let myData = {
     color: fallbackColor,
     name: nameInput.value,
     avatarUrl: "",
-    room: "room_forest", // Zelda-style starting room
+    room: "room_forest", // Starting room
     width: 32,
-    height: 32
+    height: 32,
+    // Real-world map coordinates (Agadir, Morocco default)
+    lat: 30.4278,
+    lng: -9.5981
 };
 
 let allPlayers = {};
 const loadedImages = {};
 
-// Room Theme Backgrounds & Names
+// Room Theme Backgrounds & Names (Added World Map Portal Room)
 const rooms = {
     "room_forest": { name: "🌳 Forest Clearing", bg: "#1e3f20" },
     "room_dungeon": { name: "🧱 Stone Dungeon", bg: "#2c3e50" },
-    "room_python": { name: "🐍 Python Coding Lab", bg: "#2c1654" }
+    "room_python": { name: "🐍 Python Coding Lab", bg: "#2c1654" },
+    "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
+
+// --- LEAFLET REAL-WORLD MAP SETUP ---
+let leafletMap = null;
+let leafletMarker = null;
+
+function initLeafletMap() {
+    if (!leafletMap) {
+        leafletMap = L.map('map-container', { zoomControl: false }).setView([myData.lat, myData.lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(leafletMap);
+
+        // Custom player marker on map
+        leafletMarker = L.marker([myData.lat, myData.lng]).addTo(leafletMap)
+            .bindPopup("<b>You are here (Agadir, Morocco)</b>").openPopup();
+    } else {
+        leafletMap.setView([myData.lat, myData.lng], 15);
+        leafletMarker.setLatLng([myData.lat, myData.lng]);
+    }
+}
+// ------------------------------------
 
 // --- ZELDA ROOM TRANSITION LOGIC ---
 function checkRoomTransition() {
@@ -60,28 +84,24 @@ function checkRoomTransition() {
     if (myData.x > canvas.width - myData.width) {
         if (myData.room === "room_forest") { myData.room = "room_dungeon"; myData.x = 10; changed = true; }
         else if (myData.room === "room_dungeon") { myData.room = "room_python"; myData.x = 10; changed = true; }
+        else if (myData.room === "room_python") { myData.room = "room_portal"; myData.x = 10; changed = true; }
         else { myData.x = canvas.width - myData.width; }
     }
     // Hit Left Edge
     else if (myData.x < 0) {
-        if (myData.room === "room_python") { myData.room = "room_dungeon"; myData.x = canvas.width - 40; changed = true; }
+        if (myData.room === "room_portal") { myData.room = "room_python"; myData.x = canvas.width - 40; changed = true; }
+        else if (myData.room === "room_python") { myData.room = "room_dungeon"; myData.x = canvas.width - 40; changed = true; }
         else if (myData.room === "room_dungeon") { myData.room = "room_forest"; myData.x = canvas.width - 40; changed = true; }
         else { myData.x = 0; }
     }
-    // Hit Bottom Edge
-    else if (myData.y > canvas.height - myData.height) {
-        myData.y = canvas.height - myData.height;
-    }
-    // Hit Top Edge
-    else if (myData.y < 0) {
-        myData.y = 0;
-    }
+    else if (myData.y > canvas.height - myData.height) { myData.y = canvas.height - myData.height; }
+    else if (myData.y < 0) { myData.y = 0; }
 
     return changed;
 }
 // -----------------------------------
 
-// --- SIMPLE PYTHON INTERPRETER LOGIC ---
+// --- PYTHON INTERPRETER LOGIC ---
 let pythonOutputLines = [
     "> Python 3.11.4 Environment Initialized",
     "> Type python commands below (e.g., print('Hello'))"
@@ -90,49 +110,39 @@ let pythonOutputLines = [
 function evaluatePythonCode(code) {
     code = code.trim();
     let result = "";
-
     try {
-        // Handle print statement: print("...") or print(5 + 5)
         if (code.startsWith("print(") && code.endsWith(")")) {
             let inner = code.substring(6, code.length - 1).trim();
-            // Evaluate inner math or string literals safely
             if ((inner.startsWith('"') && inner.endsWith('"')) || (inner.startsWith("'") && inner.endsWith("'"))) {
                 result = inner.substring(1, inner.length - 1);
-            } else {
-                result = eval(inner); // Simple arithmetic evaluation
-            }
-        } 
-        // Handle basic variables: x = 10
-        else if (code.includes("=") && !code.includes("==")) {
+            } else { result = eval(inner); }
+        } else if (code.includes("=") && !code.includes("==")) {
             result = "Assigned: " + code;
-        }
-        // Handle simple if-else simulation or expressions
-        else if (code.startsWith("if ") || code.includes("==")) {
-            let evaluated = eval(code.replace(":", "").replace("if ", ""));
-            result = "Condition result: " + evaluated;
-        } 
-        // Fallback arithmetic evaluation
-        else {
-            result = eval(code);
-        }
-    } catch(err) {
-        result = "SyntaxError: invalid syntax";
-    }
+        } else { result = eval(code); }
+    } catch(err) { result = "SyntaxError: invalid syntax"; }
 
     pythonOutputLines.push(">>> " + code);
     pythonOutputLines.push(String(result));
-
-    // Keep only the last 8 lines on the blackboard
-    if (pythonOutputLines.length > 8) {
-        pythonOutputLines.shift();
-        pythonOutputLines.shift();
-    }
+    if (pythonOutputLines.length > 8) { pythonOutputLines.shift(); pythonOutputLines.shift(); }
 }
-// ---------------------------------------
+// --------------------------------
 
-// Keyboard tracking with input block guard
 const keys = {};
 window.addEventListener("keydown", (e) => {
+    // If inside World Map mode, use arrow keys to pan/move across Agadir!
+    if (myData.room === "room_portal_active") {
+        let step = 0.001; // map movement speed
+        if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') myData.lat += step;
+        if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') myData.lat -= step;
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') myData.lng -= step;
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') myData.lng += step;
+        if (leafletMap && leafletMarker) {
+            leafletMap.setView([myData.lat, myData.lng]);
+            leafletMarker.setLatLng([myData.lat, myData.lng]);
+        }
+        return;
+    }
+
     if (document.activeElement.tagName === 'INPUT') return;
     let key = e.key.toLowerCase();
     if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
@@ -143,7 +153,6 @@ window.addEventListener("keyup", (e) => {
     keys[e.key.toLowerCase()] = false;
 });
 
-// Database references
 const myPlayerRef = ref(db, 'players/' + playerId);
 onDisconnect(myPlayerRef).remove();
 
@@ -152,7 +161,7 @@ onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
 });
 
-// --- CHAT & PYTHON COMMAND SYNC SYSTEM ---
+// Chat & Python Command Sync
 const chatMessagesEl = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -163,7 +172,6 @@ chatForm.addEventListener('submit', (e) => {
     let text = chatInput.value.trim();
     if (text === '') return;
 
-    // Check if message is python code
     if (text.startsWith("print(") || text.includes("=") || text.startsWith("if ") || text.match(/^\d+[\+\-\*\/]\d+$/)) {
         evaluatePythonCode(text);
     }
@@ -173,7 +181,6 @@ chatForm.addEventListener('submit', (e) => {
         text: text,
         timestamp: Date.now()
     });
-
     chatInput.value = '';
 });
 
@@ -188,10 +195,11 @@ onValue(chatRef, (snapshot) => {
     }
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 });
-// -----------------------------------------
 
 // Game loop update
 function update() {
+    if (myData.room === "room_portal_active") return; // Handled by map pan keys
+
     let speed = 4;
     let moved = false;
 
@@ -201,6 +209,14 @@ function update() {
     if (keys['d'] || keys['arrowright']) { myData.x += speed; moved = true; }
 
     let roomChanged = checkRoomTransition();
+
+    // Check if player stepped into the portal in "room_portal" (center of room)
+    if (myData.room === "room_portal" && myData.x > 350 && myData.x < 450 && myData.y > 180 && myData.y < 260) {
+        myData.room = "room_portal_active";
+        canvas.style.display = "none";
+        mapContainer.style.display = "block";
+        initLeafletMap();
+    }
 
     myData.name = nameInput.value.trim() || "Player";
     myData.avatarUrl = imageInput.value.trim();
@@ -212,35 +228,34 @@ function update() {
 
 // Draw graphics based on active room
 function draw() {
+    if (myData.room === "room_portal_active") return;
+
     let currentRoomInfo = rooms[myData.room] || rooms["room_forest"];
     viewport.style.background = currentRoomInfo.bg;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Room Name Header on Canvas
+    // Draw Room Name Header
     ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-    ctx.fillRect(10, 10, 210, 30);
+    ctx.fillRect(10, 10, 240, 30);
     ctx.fillStyle = "#fff";
     ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(currentRoomInfo.name, 20, 30);
 
-    // If inside the Python Coding Lab room, draw the big code terminal board!
+    // Python Room Terminal Board
     if (myData.room === "room_python") {
         ctx.fillStyle = "#111";
         ctx.fillRect(180, 50, 440, 220);
         ctx.strokeStyle = "#8e44ad";
         ctx.lineWidth = 3;
         ctx.strokeRect(180, 50, 440, 220);
-
-        // Terminal Header
         ctx.fillStyle = "#8e44ad";
         ctx.fillRect(180, 50, 440, 25);
         ctx.fillStyle = "#fff";
         ctx.font = "bold 12px monospace";
         ctx.fillText("🐍 python3 terminal_lab.py", 190, 67);
 
-        // Terminal Output Lines
         ctx.font = "12px monospace";
         ctx.fillStyle = "#2ecc71";
         let startY = 95;
@@ -250,7 +265,19 @@ function draw() {
         }
     }
 
-    // Draw all players who are in the SAME Zelda room
+    // Portal Room Portal Graphics
+    if (myData.room === "room_portal") {
+        ctx.fillStyle = "#00ffff";
+        ctx.beginPath();
+        ctx.arc(400, 220, 50, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("ENTER PORTAL", 400, 224);
+    }
+
+    // Draw Players
     for (let id in allPlayers) {
         let p = allPlayers[id];
         if (p.room !== myData.room) continue;
@@ -265,7 +292,6 @@ function draw() {
                 img.src = p.avatarUrl;
                 loadedImages[p.avatarUrl] = img;
             }
-
             let imgObj = loadedImages[p.avatarUrl];
             if (imgObj.complete && imgObj.naturalWidth !== 0) {
                 ctx.drawImage(imgObj, p.x, p.y, pWidth, pHeight);
