@@ -52,23 +52,37 @@ const rooms = {
     "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
 
-// --- SATELLITE MAP & LOBBY-STYLE CUBE MARKER SETUP ---
+// --- SATELLITE MAP (STREET-SCALE & LOCKED ZOOM) ---
 let leafletMap = null;
 let leafletMarker = null;
 
 function initLeafletMap() {
     if (!leafletMap) {
-        leafletMap = L.map('map-container', { zoomControl: false }).setView([myData.lat, myData.lng], 16);
+        // Disabled all zooming controls to lock user at street level
+        leafletMap = L.map('map-container', {
+            zoomControl: false,
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            touchZoom: false
+        }).setView([myData.lat, myData.lng], 18); // Zoom 18 provides ideal street/car scale
         
-        // Esri World Imagery Satellite Tile Layer
+        // 1. Esri World Imagery Satellite Tiles
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            attribution: 'Tiles &copy; Esri'
+        }).addTo(leafletMap);
+
+        // 2. ArcGIS Reference Labels (Adds street names, places, and neighborhood tags over satellite)
+        L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19
         }).addTo(leafletMap);
 
         createOrUpdateMarker();
     } else {
-        leafletMap.setView([myData.lat, myData.lng], 16);
+        leafletMap.setView([myData.lat, myData.lng], 18);
         createOrUpdateMarker();
     }
 }
@@ -78,23 +92,22 @@ function createOrUpdateMarker() {
     let avatarUrl = imageInput.value.trim();
     let color = myData.color || "#888";
 
-    // Create a mini canvas element to dynamically render the exact same lobby cube + name tag
+    // Scaled down dimensions to look correct relative to real-world streets and future cars
     let iconCanvas = document.createElement('canvas');
-    iconCanvas.width = 100;
-    iconCanvas.height = 60;
+    iconCanvas.width = 60;
+    iconCanvas.height = 40;
     let iconCtx = iconCanvas.getContext('2d');
 
-    // Draw Name Tag on top
+    // Name tag text
     iconCtx.fillStyle = "#fff";
-    iconCtx.font = "bold 11px sans-serif";
+    iconCtx.font = "bold 9px sans-serif";
     iconCtx.textAlign = "center";
-    iconCtx.fillText(name, 50, 12);
+    iconCtx.fillText(name, 30, 9);
 
-    let cubeX = 34;
-    let cubeY = 18;
-    let cubeSize = 32;
+    let cubeX = 22;
+    let cubeY = 12;
+    let cubeSize = 16; // Perfectly sized for street-level views
 
-    // Draw Lobby Cube (Image or Color)
     if (avatarUrl && avatarUrl.startsWith('http')) {
         if (!loadedImages[avatarUrl]) {
             let img = new Image();
@@ -115,10 +128,10 @@ function createOrUpdateMarker() {
     }
 
     let customIcon = L.divIcon({
-        className: 'lobby-cube-icon',
+        className: 'street-cube-icon',
         html: iconCanvas,
-        iconSize: [100, 60],
-        iconAnchor: [50, 34] // centers the cube right on the GPS coordinate
+        iconSize: [60, 40],
+        iconAnchor: [30, 20]
     });
 
     if (!leafletMarker) {
@@ -176,21 +189,6 @@ function evaluatePythonCode(code) {
 
 const keys = {};
 window.addEventListener("keydown", (e) => {
-    // If in Satellite Map view, pan around Agadir using WASD or arrow keys!
-    if (myData.room === "room_portal_active") {
-        let step = 0.0008;
-        if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') myData.lat += step;
-        if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') myData.lat -= step;
-        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') myData.lng -= step;
-        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') myData.lng += step;
-        
-        if (leafletMap) {
-            leafletMap.setView([myData.lat, myData.lng]);
-            createOrUpdateMarker();
-        }
-        return;
-    }
-
     if (document.activeElement.tagName === 'INPUT') return;
     let key = e.key.toLowerCase();
     if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
@@ -245,7 +243,24 @@ onValue(chatRef, (snapshot) => {
 });
 
 function update() {
-    if (myData.room === "room_portal_active") return;
+    // Smooth GPS movement handling for satellite mode
+    if (myData.room === "room_portal_active") {
+        let step = 0.00008; // Delicate micro-step for smooth glide across streets
+        let movedMap = false;
+
+        if (keys['w'] || keys['arrowup']) { myData.lat += step; movedMap = true; }
+        if (keys['s'] || keys['arrowdown']) { myData.lat -= step; movedMap = true; }
+        if (keys['a'] || keys['arrowleft']) { myData.lng -= step; movedMap = true; }
+        if (keys['d'] || keys['arrowright']) { myData.lng += step; movedMap = true; }
+
+        if (movedMap && leafletMap) {
+            // Smoothly pan map view without jerky coordinate jumping
+            leafletMap.panTo([myData.lat, myData.lng], { animate: true, duration: 0.1 });
+            createOrUpdateMarker();
+            set(myPlayerRef, myData);
+        }
+        return;
+    }
 
     let speed = 4;
     let moved = false;
