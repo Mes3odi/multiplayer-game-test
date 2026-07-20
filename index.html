@@ -30,14 +30,10 @@
 </head>
 <body>
 
-    <div id="info">Use <b>WASD</b> or <b>Arrow Keys</b> to move. Open this page in two tabs to test!</div>
+    <div id="info">Use <b>WASD</b> or <b>Arrow Keys</b> to move. Open in two tabs to test!</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-    <!-- Load Firebase Scripts (Compat v10 versions for easy browser usage) -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
-
-    <!-- Your Game Logic -->
-    <script type="module"></script>
+    <!-- Load Game Script as a Module -->
+    <script type="module" src="game.js"></script>
 </body>
 </html>
