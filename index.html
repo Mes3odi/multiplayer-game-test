@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Firebase Multiplayer Game with Custom Images</title>
+    <title>GitHub Firebase Multiplayer - Game & Cinema</title>
     <style>
         html, body {
             margin: 0;
@@ -27,22 +27,71 @@
             font-size: 13px;
             color: #aaa;
         }
-        #name-input, #image-input {
+        input, button {
             background: #222;
             border: 1px solid #444;
             color: #fff;
-            padding: 4px 8px;
+            padding: 5px 10px;
             border-radius: 4px;
             font-size: 12px;
             outline: none;
         }
-        #name-input { width: 120px; }
-        canvas {
+        #name-input { width: 110px; }
+        #image-input { width: 160px; }
+        .room-btn {
+            background: #333;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .room-btn.active {
+            background: #27ae60;
+            border-color: #2ecc71;
+        }
+        .room-btn:hover { background: #444; }
+
+        /* Container for Game or Cinema */
+        #viewport {
+            position: relative;
+            width: 800px;
+            height: 440px;
             background: #222;
             border: 2px solid #555;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        canvas {
             display: block;
         }
+
+        /* Cinema UI Overlay */
+        #cinema-screen {
+            position: absolute;
+            top: 20px;
+            left: 150px;
+            width: 500px;
+            height: 280px;
+            background: #000;
+            border: 4px solid #333;
+            display: none;
+        }
+        #cinema-screen iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        #cinema-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            display: none;
+        }
+        #yt-input {
+            width: 350px;
+            background: #111;
+        }
+
+        /* Chat Box Styling */
         #chat-container {
             width: 800px;
             margin-top: 8px;
@@ -83,7 +132,6 @@
             padding: 0 12px;
             cursor: pointer;
             font-weight: bold;
-            font-size: 12px;
         }
         #chat-send:hover { background: #555; }
     </style>
@@ -93,12 +141,26 @@
     <div id="top-bar">
         <span>Name:</span>
         <input type="text" id="name-input" value="Player" maxlength="12">
-        <span>Avatar Image URL:</span>
-        <input type="text" id="image-input" placeholder="Paste direct image link here (optional)">
-        <span>| Use WASD to move</span>
+        <span>Avatar URL:</span>
+        <input type="text" id="image-input" placeholder="Optional image link">
+        <span>| Room:</span>
+        <button id="btn-game" class="room-btn active">🎮 Game Room</button>
+        <button id="btn-cinema" class="room-btn">🍿 Cinema Room</button>
     </div>
 
-    <canvas id="gameCanvas" width="800" height="440"></canvas>
+    <!-- Viewport holding Canvas or Cinema -->
+    <div id="viewport">
+        <canvas id="gameCanvas" width="800" height="440"></canvas>
+        
+        <!-- Cinema Elements -->
+        <div id="cinema-screen">
+            <iframe id="yt-iframe" src="" allowfullscreen></iframe>
+        </div>
+        <div id="cinema-controls">
+            <input type="text" id="yt-input" placeholder="Paste YouTube link here (e.g. https://youtu.be/...)">
+            <button id="yt-set-btn">Play Video</button>
+        </div>
+    </div>
 
     <div id="chat-container">
         <div id="chat-messages"></div>
