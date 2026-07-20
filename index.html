@@ -72,9 +72,10 @@
             border: 4px solid #333;
             display: none;
         }
-        #youtube-player {
+        #yt-iframe {
             width: 100%;
             height: 100%;
+            border: none;
         }
         #cinema-controls {
             position: absolute;
@@ -152,8 +153,7 @@
         
         <!-- Cinema Elements -->
         <div id="cinema-screen">
-            <!-- Official YouTube IFrame Player API Container -->
-            <div id="youtube-player"></div>
+            <iframe id="yt-iframe" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
         </div>
         <div id="cinema-controls">
             <input type="text" id="yt-input" placeholder="Paste YouTube link here (e.g. https://youtu.be/...)">
@@ -168,9 +168,6 @@
             <button type="submit" id="chat-send">Send</button>
         </form>
     </div>
-
-    <!-- Load Official YouTube IFrame API Script -->
-    <script src="https://www.youtube.com/iframe_api"></script>
 
     <!-- Load Game Script as a Module -->
     <script type="module" src="game.js"></script>
