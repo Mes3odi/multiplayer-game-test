@@ -2,6 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, push, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
+// Your actual Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyCBn-G8DOt82PIVs-j7sdYin3zFv_Z08Uk",
     authDomain: "multiplayer-game-test-e72b8.firebaseapp.com",
@@ -13,33 +14,30 @@ const firebaseConfig = {
     measurementId: "G-MXZMBNWZ8B"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// Canvas & UI Setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+const viewport = document.getElementById("viewport");
 
 const nameInput = document.getElementById('name-input');
 nameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
 const imageInput = document.getElementById('image-input');
 
-const btnGame = document.getElementById('btn-game');
-const btnCinema = document.getElementById('btn-cinema');
-const cinemaScreen = document.getElementById('cinema-screen');
-const cinemaControls = document.getElementById('cinema-controls');
-const ytInput = document.getElementById('yt-input');
-const ytSetBtn = document.getElementById('yt-set-btn');
-
+// Unique ID for this browser session
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
 const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
 
 let myData = {
-    x: Math.random() * (canvas.width - 40),
-    y: Math.random() * (canvas.height - 40),
+    x: 400,
+    y: 220,
     color: fallbackColor,
     name: nameInput.value,
     avatarUrl: "",
-    room: "game",
+    room: "room_forest", // Zelda-style starting room
     width: 32,
     height: 32
 };
@@ -47,118 +45,92 @@ let myData = {
 let allPlayers = {};
 const loadedImages = {};
 
-// --- YOUTUBE API SYNC ENGINE ---
-let ytPlayer = null;
-let isSettingFromFirebase = false;
-
-window.onYouTubeIframeAPIReady = function() {
-    ytPlayer = new YT.Player('youtube-player', {
-        height: '100%',
-        width: '100%',
-        videoId: '',
-        playerVars: {
-            'autoplay': 1,
-            'controls': 1,
-            'enablejsapi': 1
-        },
-        events: {
-            'onStateChange': onPlayerStateChange
-        }
-    });
+// Room Theme Backgrounds & Names
+const rooms = {
+    "room_forest": { name: "🌳 Forest Clearing", bg: "#1e3f20" },
+    "room_dungeon": { name: "🧱 Stone Dungeon", bg: "#2c3e50" },
+    "room_python": { name: "🐍 Python Coding Lab", bg: "#2c1654" }
 };
 
-const cinemaRef = ref(db, 'cinema');
+// --- ZELDA ROOM TRANSITION LOGIC ---
+function checkRoomTransition() {
+    let changed = false;
 
-// When user clicks "Play Video" button with a link
-ytSetBtn.addEventListener('click', () => {
-    let url = ytInput.value.trim();
-    let videoId = extractYouTubeId(url);
-    if (videoId) {
-        set(cinemaRef, {
-            videoId: videoId,
-            time: 0,
-            state: YT.PlayerState.PLAYING,
-            updatedAt: Date.now()
-        });
-        ytInput.value = "";
-    } else {
-        alert("Please paste a valid YouTube link!");
+    // Hit Right Edge
+    if (myData.x > canvas.width - myData.width) {
+        if (myData.room === "room_forest") { myData.room = "room_dungeon"; myData.x = 10; changed = true; }
+        else if (myData.room === "room_dungeon") { myData.room = "room_python"; myData.x = 10; changed = true; }
+        else { myData.x = canvas.width - myData.width; }
     }
-});
-
-// Capture local player actions (Play/Pause/Seek) to sync to others
-function onPlayerStateChange(event) {
-    if (isSettingFromFirebase) return;
-    if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
-
-    let state = event.data;
-    // States: 1 = Playing, 2 = Paused
-    if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED) {
-        let currentTime = ytPlayer.getCurrentTime();
-        let videoData = ytPlayer.getVideoData();
-        if (videoData && videoData.video_id) {
-            set(cinemaRef, {
-                videoId: videoData.video_id,
-                time: currentTime,
-                state: state,
-                updatedAt: Date.now()
-            });
-        }
+    // Hit Left Edge
+    else if (myData.x < 0) {
+        if (myData.room === "room_python") { myData.room = "room_dungeon"; myData.x = canvas.width - 40; changed = true; }
+        else if (myData.room === "room_dungeon") { myData.room = "room_forest"; myData.x = canvas.width - 40; changed = true; }
+        else { myData.x = 0; }
     }
+    // Hit Bottom Edge
+    else if (myData.y > canvas.height - myData.height) {
+        myData.y = canvas.height - myData.height;
+    }
+    // Hit Top Edge
+    else if (myData.y < 0) {
+        myData.y = 0;
+    }
+
+    return changed;
 }
+// -----------------------------------
 
-// Listen for updates from Firebase across all users
-onValue(cinemaRef, (snapshot) => {
-    let data = snapshot.val();
-    if (!data || !ytPlayer || typeof ytPlayer.loadVideoById !== 'function') return;
+// --- SIMPLE PYTHON INTERPRETER LOGIC ---
+let pythonOutputLines = [
+    "> Python 3.11.4 Environment Initialized",
+    "> Type python commands below (e.g., print('Hello'))"
+];
 
-    isSettingFromFirebase = true;
+function evaluatePythonCode(code) {
+    code = code.trim();
+    let result = "";
 
-    let serverVideoId = data.videoId;
-    let serverState = data.state;
-    let serverTime = data.time || 0;
-    let updatedAt = data.updatedAt || Date.now();
-
-    // Calculate time elapsed if it was playing
-    let targetTime = serverTime;
-    if (serverState === YT.PlayerState.PLAYING) {
-        let elapsed = (Date.now() - updatedAt) / 1000;
-        targetTime += elapsed;
-    }
-
-    let currentVideoId = "";
     try {
-        let vData = ytPlayer.getVideoData();
-        if (vData) currentVideoId = vData.video_id;
-    } catch(e) {}
-
-    // Load video if it's different or sync time if out of sync by more than 2 seconds
-    let localTime = 0;
-    try { localTime = ytPlayer.getCurrentTime(); } catch(e) {}
-
-    if (currentVideoId !== serverVideoId) {
-        ytPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: targetTime });
-    } else if (Math.abs(localTime - targetTime) > 2) {
-        ytPlayer.seekTo(targetTime, true);
+        // Handle print statement: print("...") or print(5 + 5)
+        if (code.startsWith("print(") && code.endsWith(")")) {
+            let inner = code.substring(6, code.length - 1).trim();
+            // Evaluate inner math or string literals safely
+            if ((inner.startsWith('"') && inner.endsWith('"')) || (inner.startsWith("'") && inner.endsWith("'"))) {
+                result = inner.substring(1, inner.length - 1);
+            } else {
+                result = eval(inner); // Simple arithmetic evaluation
+            }
+        } 
+        // Handle basic variables: x = 10
+        else if (code.includes("=") && !code.includes("==")) {
+            result = "Assigned: " + code;
+        }
+        // Handle simple if-else simulation or expressions
+        else if (code.startsWith("if ") || code.includes("==")) {
+            let evaluated = eval(code.replace(":", "").replace("if ", ""));
+            result = "Condition result: " + evaluated;
+        } 
+        // Fallback arithmetic evaluation
+        else {
+            result = eval(code);
+        }
+    } catch(err) {
+        result = "SyntaxError: invalid syntax";
     }
 
-    // Apply Play/Pause state match
-    if (serverState === YT.PlayerState.PLAYING) {
-        ytPlayer.playVideo();
-    } else if (serverState === YT.PlayerState.PAUSED) {
-        ytPlayer.pauseVideo();
+    pythonOutputLines.push(">>> " + code);
+    pythonOutputLines.push(String(result));
+
+    // Keep only the last 8 lines on the blackboard
+    if (pythonOutputLines.length > 8) {
+        pythonOutputLines.shift();
+        pythonOutputLines.shift();
     }
-
-    setTimeout(() => { isSettingFromFirebase = false; }, 500);
-});
-
-function extractYouTubeId(url) {
-    let regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    let match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
 }
-// -----------------------------
+// ---------------------------------------
 
+// Keyboard tracking with input block guard
 const keys = {};
 window.addEventListener("keydown", (e) => {
     if (document.activeElement.tagName === 'INPUT') return;
@@ -171,6 +143,7 @@ window.addEventListener("keyup", (e) => {
     keys[e.key.toLowerCase()] = false;
 });
 
+// Database references
 const myPlayerRef = ref(db, 'players/' + playerId);
 onDisconnect(myPlayerRef).remove();
 
@@ -179,26 +152,7 @@ onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
 });
 
-btnGame.addEventListener('click', () => {
-    myData.room = "game";
-    btnGame.classList.add('active');
-    btnCinema.classList.remove('active');
-    canvas.style.display = "block";
-    cinemaScreen.style.display = "none";
-    cinemaControls.style.display = "none";
-    set(myPlayerRef, myData);
-});
-
-btnCinema.addEventListener('click', () => {
-    myData.room = "cinema";
-    btnCinema.classList.add('active');
-    btnGame.classList.remove('active');
-    canvas.style.display = "block"; 
-    cinemaScreen.style.display = "block";
-    cinemaControls.style.display = "block";
-    set(myPlayerRef, myData);
-});
-
+// --- CHAT & PYTHON COMMAND SYNC SYSTEM ---
 const chatMessagesEl = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -208,11 +162,18 @@ chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     let text = chatInput.value.trim();
     if (text === '') return;
+
+    // Check if message is python code
+    if (text.startsWith("print(") || text.includes("=") || text.startsWith("if ") || text.match(/^\d+[\+\-\*\/]\d+$/)) {
+        evaluatePythonCode(text);
+    }
+
     push(chatRef, {
         name: nameInput.value.trim() || "Player",
         text: text,
         timestamp: Date.now()
     });
+
     chatInput.value = '';
 });
 
@@ -227,7 +188,9 @@ onValue(chatRef, (snapshot) => {
     }
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 });
+// -----------------------------------------
 
+// Game loop update
 function update() {
     let speed = 4;
     let moved = false;
@@ -237,29 +200,57 @@ function update() {
     if (keys['a'] || keys['arrowleft']) { myData.x -= speed; moved = true; }
     if (keys['d'] || keys['arrowright']) { myData.x += speed; moved = true; }
 
-    myData.x = Math.max(0, Math.min(canvas.width - myData.width, myData.x));
-    myData.y = Math.max(0, Math.min(canvas.height - myData.height, myData.y));
+    let roomChanged = checkRoomTransition();
 
     myData.name = nameInput.value.trim() || "Player";
     myData.avatarUrl = imageInput.value.trim();
 
-    if (moved || document.activeElement === nameInput || document.activeElement === imageInput) {
+    if (moved || roomChanged || document.activeElement === nameInput || document.activeElement === imageInput) {
         set(myPlayerRef, myData);
     }
 }
 
+// Draw graphics based on active room
 function draw() {
+    let currentRoomInfo = rooms[myData.room] || rooms["room_forest"];
+    viewport.style.background = currentRoomInfo.bg;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (myData.room === "cinema") {
-        ctx.fillStyle = "#332211";
-        for (let row = 320; row < 420; row += 35) {
-            for (let col = 100; col < 750; col += 60) {
-                ctx.fillRect(col, row, 40, 20);
-            }
+    // Draw Room Name Header on Canvas
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.fillRect(10, 10, 210, 30);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(currentRoomInfo.name, 20, 30);
+
+    // If inside the Python Coding Lab room, draw the big code terminal board!
+    if (myData.room === "room_python") {
+        ctx.fillStyle = "#111";
+        ctx.fillRect(180, 50, 440, 220);
+        ctx.strokeStyle = "#8e44ad";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(180, 50, 440, 220);
+
+        // Terminal Header
+        ctx.fillStyle = "#8e44ad";
+        ctx.fillRect(180, 50, 440, 25);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 12px monospace";
+        ctx.fillText("🐍 python3 terminal_lab.py", 190, 67);
+
+        // Terminal Output Lines
+        ctx.font = "12px monospace";
+        ctx.fillStyle = "#2ecc71";
+        let startY = 95;
+        for (let line of pythonOutputLines) {
+            ctx.fillText(line, 195, startY);
+            startY += 20;
         }
     }
 
+    // Draw all players who are in the SAME Zelda room
     for (let id in allPlayers) {
         let p = allPlayers[id];
         if (p.room !== myData.room) continue;
