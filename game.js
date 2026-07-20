@@ -32,7 +32,6 @@ const cinemaScreen = document.getElementById('cinema-screen');
 const cinemaControls = document.getElementById('cinema-controls');
 const ytInput = document.getElementById('yt-input');
 const ytSetBtn = document.getElementById('yt-set-btn');
-const ytIframe = document.getElementById('yt-iframe');
 
 // Unique ID for this browser session
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
@@ -44,7 +43,7 @@ let myData = {
     color: fallbackColor,
     name: nameInput.value,
     avatarUrl: "",
-    room: "game", // "game" or "cinema"
+    room: "game",
     width: 32,
     height: 32
 };
@@ -52,12 +51,71 @@ let myData = {
 let allPlayers = {};
 const loadedImages = {};
 
-// --- FIXED KEYBOARD LOGIC ---
+// --- YOUTUBE API SYNC LOGIC ---
+let ytPlayer = null;
+let currentSyncedVideoId = "";
+let videoStartTime = 0;
+
+// This function is automatically called by YouTube's API script when it loads
+window.onYouTubeIframeAPIReady = function() {
+    ytPlayer = new YT.Player('youtube-player', {
+        height: '100%',
+        width: '100%',
+        videoId: '',
+        playerVars: {
+            'autoplay': 1,
+            'controls': 1
+        }
+    });
+};
+
+const cinemaRef = ref(db, 'cinema');
+
+ytSetBtn.addEventListener('click', () => {
+    let url = ytInput.value.trim();
+    let videoId = extractYouTubeId(url);
+    if (videoId) {
+        // Save both video ID and precise server timestamp so everyone syncs instantly
+        set(cinemaRef, {
+            videoId: videoId,
+            startedAt: Date.now()
+        });
+        ytInput.value = "";
+    } else {
+        alert("Please paste a valid YouTube link!");
+    }
+});
+
+// Listen to cinema updates in Firebase
+onValue(cinemaRef, (snapshot) => {
+    let data = snapshot.val();
+    if (data && data.videoId) {
+        currentSyncedVideoId = data.videoId;
+        videoStartTime = data.startedAt || Date.now();
+
+        // Calculate exact playback position accounting for network delay
+        let elapsedSeconds = (Date.now() - videoStartTime) / 1000;
+
+        if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+            ytPlayer.loadVideoById({
+                videoId: currentSyncedVideoId,
+                startSeconds: elapsedSeconds
+            });
+        }
+    }
+});
+
+function extractYouTubeId(url) {
+    let regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    let match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
+// -----------------------------
+
+// Keyboard tracking with input block guard
 const keys = {};
 window.addEventListener("keydown", (e) => {
-    // CRITICAL FIX: If user is typing in ANY input field, ignore WASD movement entirely
     if (document.activeElement.tagName === 'INPUT') return;
-    
     const key = e.key.toLowerCase();
     if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         keys[key] = true;
@@ -67,7 +125,6 @@ window.addEventListener("keyup", (e) => {
     const key = e.key.toLowerCase();
     keys[key] = false;
 });
-// ----------------------------
 
 // Database references
 const myPlayerRef = ref(db, 'players/' + playerId);
@@ -86,7 +143,6 @@ btnGame.addEventListener('click', () => {
     canvas.style.display = "block";
     cinemaScreen.style.display = "none";
     cinemaControls.style.display = "none";
-    ytIframe.src = ""; // Stop video audio when leaving
     set(myPlayerRef, myData);
 });
 
@@ -94,37 +150,20 @@ btnCinema.addEventListener('click', () => {
     myData.room = "cinema";
     btnCinema.classList.add('active');
     btnGame.classList.remove('active');
-    canvas.style.display = "block"; // Keep canvas running for theater seats
+    canvas.style.display = "block"; 
     cinemaScreen.style.display = "block";
     cinemaControls.style.display = "block";
     set(myPlayerRef, myData);
-});
 
-// YouTube Sync Logic in Cinema Room
-const cinemaRef = ref(db, 'cinema/currentVideo');
-ytSetBtn.addEventListener('click', () => {
-    let url = ytInput.value.trim();
-    let videoId = extractYouTubeId(url);
-    if (videoId) {
-        set(cinemaRef, videoId);
-        ytInput.value = "";
-    } else {
-        alert("Please paste a valid YouTube link!");
+    // Instantly sync video position when walking into the cinema room
+    if (ytPlayer && typeof ytPlayer.loadVideoById === 'function' && currentSyncedVideoId) {
+        let elapsedSeconds = (Date.now() - videoStartTime) / 1000;
+        ytPlayer.loadVideoById({
+            videoId: currentSyncedVideoId,
+            startSeconds: elapsedSeconds
+        });
     }
 });
-
-onValue(cinemaRef, (snapshot) => {
-    let vidId = snapshot.val();
-    if (vidId) {
-        ytIframe.src = `https://www.youtube.com/embed/${vidId}?autoplay=1`;
-    }
-});
-
-function extractYouTubeId(url) {
-    let regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    let match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
-}
 
 // --- CHAT SYSTEM LOGIC ---
 const chatMessagesEl = document.getElementById('chat-messages');
@@ -184,10 +223,8 @@ function update() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // If in Cinema Room, draw theater seats decoration on canvas
     if (myData.room === "cinema") {
         ctx.fillStyle = "#332211";
-        // Draw rows of seats facing the center screen
         for (let row = 320; row < 420; row += 35) {
             for (let col = 100; col < 750; col += 60) {
                 ctx.fillRect(col, row, 40, 20);
@@ -195,10 +232,9 @@ function draw() {
         }
     }
 
-    // Draw all players who are in the SAME room as you
     for (let id in allPlayers) {
         let p = allPlayers[id];
-        if (p.room !== myData.room) continue; // Skip players in other rooms
+        if (p.room !== myData.room) continue;
 
         let pName = p.name || "Player";
         let pWidth = p.width || 32;
@@ -223,7 +259,6 @@ function draw() {
             ctx.fillRect(p.x, p.y, pWidth, pHeight);
         }
 
-        // Draw name above avatar
         ctx.fillStyle = "#fff";
         ctx.font = "11px sans-serif";
         ctx.textAlign = "center";
