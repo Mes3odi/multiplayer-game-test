@@ -1,6 +1,6 @@
-// Import Firebase from the official web cloud delivery network
+// Import Firebase SDKs
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, push, onValue, onDisconnect, limitToLast, query } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getDatabase, ref, set, push, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // Your actual Firebase configuration
 const firebaseConfig = {
@@ -22,25 +22,34 @@ const db = getDatabase(app);
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Generate unique ID and random color for this player
+// Unique ID for this browser tab
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
-const playerName = 'Player_' + Math.floor(Math.random() * 900 + 100);
-const playerColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+
+// UI Elements
+const nameInput = document.getElementById('name-input');
+nameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
+
+const imageInput = document.getElementById('image-input');
 
 let myData = {
     x: Math.random() * (canvas.width - 40),
     y: Math.random() * (canvas.height - 40),
-    color: playerColor,
-    name: playerName
+    color: fallbackColor,
+    name: nameInput.value,
+    avatarUrl: "",
+    width: 32,
+    height: 32
 };
 
 let allPlayers = {};
+const loadedImages = {}; // Cache for player character images
 
 // Keyboard tracking
 const keys = {};
 window.addEventListener("keydown", (e) => {
-    // Prevent typing keys from moving the character if focused on chat
-    if (document.activeElement.id === 'chat-input') return;
+    // Don't move character if typing in name or chat boxes
+    if (document.activeElement.tagName === 'INPUT') return;
     keys[e.key.toLowerCase()] = true;
 });
 window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
@@ -49,7 +58,6 @@ window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
 const myPlayerRef = ref(db, 'players/' + playerId);
 onDisconnect(myPlayerRef).remove();
 
-// Listen to all players in real-time
 const playersRef = ref(db, 'players');
 onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
@@ -61,15 +69,13 @@ const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
 const chatRef = ref(db, 'chats');
 
-// Send message to Firebase forever when user submits form
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = chatInput.value.trim();
     if (text === '') return;
 
-    // push() generates a unique permanent ID for each message so they stack up forever
     push(chatRef, {
-        name: playerName,
+        name: nameInput.value.trim() || "Player",
         text: text,
         timestamp: Date.now()
     });
@@ -77,20 +83,15 @@ chatForm.addEventListener('submit', (e) => {
     chatInput.value = '';
 });
 
-// Listen to chat messages from Firebase in real-time
 onValue(chatRef, (snapshot) => {
     const chats = snapshot.val() || {};
-    chatMessagesEl.innerHTML = ''; // Clear box and redraw all permanent entries
-
-    // Loop through historical messages saved in database
+    chatMessagesEl.innerHTML = '';
     for (let id in chats) {
         let msg = chats[id];
         let msgDiv = document.createElement('div');
         msgDiv.innerHTML = `<b>${msg.name}:</b> ${msg.text}`;
         chatMessagesEl.appendChild(msgDiv);
     }
-
-    // Auto-scroll chat box to the absolute bottom
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 });
 // -------------------------
@@ -106,27 +107,57 @@ function update() {
     if (keys['d'] || keys['arrowright']) { myData.x += speed; moved = true; }
 
     // Screen bounds
-    myData.x = Math.max(0, Math.min(canvas.width - 30, myData.x));
-    myData.y = Math.max(0, Math.min(canvas.height - 30, myData.y));
+    myData.x = Math.max(0, Math.min(canvas.width - myData.width, myData.x));
+    myData.y = Math.max(0, Math.min(canvas.height - myData.height, myData.y));
 
-    if (moved) {
+    // Update custom name & avatar link from input fields live
+    myData.name = nameInput.value.trim() || "Player";
+    myData.avatarUrl = imageInput.value.trim();
+
+    if (moved || nameInput === document.activeElement || imageInput === document.activeElement) {
         set(myPlayerRef, myData);
     }
 }
 
-// Draw graphics
+// Draw graphics & character pictures
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     for (let id in allPlayers) {
         let p = allPlayers[id];
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 30, 30);
-        
-        // Draw player name above box
+        let pName = p.name || "Player";
+        let pWidth = p.width || 32;
+        let pHeight = p.height || 32;
+
+        // Check if player provided a valid image URL
+        if (p.avatarUrl && p.avatarUrl.startsWith('http')) {
+            // Load and cache the image
+            if (!loadedImages[p.avatarUrl]) {
+                let img = new Image();
+                img.src = p.avatarUrl;
+                loadedImages[p.avatarUrl] = img;
+            }
+
+            let imgObj = loadedImages[p.avatarUrl];
+            if (imgObj.complete && imgObj.naturalWidth !== 0) {
+                // Draw custom character image
+                ctx.drawImage(imgObj, p.x, p.y, pWidth, pHeight);
+            } else {
+                // Fallback box while image loads
+                ctx.fillStyle = p.color || "#888";
+                ctx.fillRect(p.x, p.y, pWidth, pHeight);
+            }
+        } else {
+            // Default colored square if no image link is provided
+            ctx.fillStyle = p.color || "#888";
+            ctx.fillRect(p.x, p.y, pWidth, pHeight);
+        }
+
+        // Draw player name above the character
         ctx.fillStyle = "#fff";
-        ctx.font = "10px sans-serif";
-        ctx.fillText(p.name || "Player", p.x, p.y - 6);
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(pName, p.x + pWidth / 2, p.y - 6);
     }
 }
 
