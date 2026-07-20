@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Firebase Multiplayer - Synced Cinema</title>
+    <title>GitHub Firebase Multiplayer - Zelda Rooms & Python Lab</title>
     <style>
         html, body {
             margin: 0;
@@ -22,12 +22,12 @@
         #top-bar {
             margin-bottom: 8px;
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
             font-size: 13px;
             color: #aaa;
         }
-        input, button {
+        input {
             background: #222;
             border: 1px solid #444;
             color: #fff;
@@ -38,55 +38,17 @@
         }
         #name-input { width: 110px; }
         #image-input { width: 160px; }
-        .room-btn {
-            background: #333;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .room-btn.active {
-            background: #27ae60;
-            border-color: #2ecc71;
-        }
-        .room-btn:hover { background: #444; }
 
         #viewport {
             position: relative;
             width: 800px;
             height: 440px;
-            background: #222;
-            border: 2px solid #555;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background: #1e3f20; /* Zelda forest green default */
+            border: 3px solid #555;
+            box-shadow: 0 0 20px rgba(0,0,0,0.6);
         }
         canvas {
             display: block;
-        }
-
-        /* Cinema UI Overlay */
-        #cinema-screen {
-            position: absolute;
-            top: 20px;
-            left: 150px;
-            width: 500px;
-            height: 280px;
-            background: #000;
-            border: 4px solid #333;
-            display: none;
-        }
-        #youtube-player {
-            width: 100%;
-            height: 100%;
-        }
-        #cinema-controls {
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            display: none;
-        }
-        #yt-input {
-            width: 350px;
-            background: #111;
         }
 
         /* Chat Box Styling */
@@ -98,7 +60,7 @@
             border-radius: 4px;
             display: flex;
             flex-direction: column;
-            height: 100px;
+            height: 110px;
         }
         #chat-messages {
             flex: 1;
@@ -127,7 +89,7 @@
             background: #444;
             color: #fff;
             border: none;
-            padding: 0 12px;
+            padding: 0 14px;
             cursor: pointer;
             font-weight: bold;
         }
@@ -141,35 +103,20 @@
         <input type="text" id="name-input" value="Player" maxlength="12">
         <span>Avatar URL:</span>
         <input type="text" id="image-input" placeholder="Optional image link">
-        <span>| Room:</span>
-        <button id="btn-game" class="room-btn active">🎮 Game Room</button>
-        <button id="btn-cinema" class="room-btn">🍿 Cinema Room</button>
+        <span style="color: #2ecc71; font-weight: bold;">💡 Tip: Walk off screen edges to switch rooms! Type Python code in chat!</span>
     </div>
 
-    <!-- Viewport holding Canvas or Cinema -->
     <div id="viewport">
         <canvas id="gameCanvas" width="800" height="440"></canvas>
-        
-        <!-- Cinema Elements -->
-        <div id="cinema-screen">
-            <div id="youtube-player"></div>
-        </div>
-        <div id="cinema-controls">
-            <input type="text" id="yt-input" placeholder="Paste YouTube link here (e.g. https://youtu.be/...)">
-            <button id="yt-set-btn">Play Video</button>
-        </div>
     </div>
 
     <div id="chat-container">
         <div id="chat-messages"></div>
         <form id="chat-form">
-            <input type="text" id="chat-input" placeholder="Type a permanent message..." autocomplete="off">
+            <input type="text" id="chat-input" placeholder="Type a chat message or Python code (e.g. print('Hello World'))..." autocomplete="off">
             <button type="submit" id="chat-send">Send</button>
         </form>
     </div>
-
-    <!-- YouTube IFrame API Script -->
-    <script src="https://www.youtube.com/iframe_api"></script>
 
     <!-- Load Game Script as a Module -->
     <script type="module" src="game.js"></script>
