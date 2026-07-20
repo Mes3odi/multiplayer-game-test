@@ -44,6 +44,8 @@ let myData = {
 
 let allPlayers = {};
 const loadedImages = {};
+let leafletMap = null;
+let leafletMarkers = {}; // Tracks map markers for all connected players
 
 const rooms = {
     "room_forest": { name: "🌳 Forest Clearing", bg: "#1e3f20" },
@@ -52,13 +54,9 @@ const rooms = {
     "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
 
-// --- SATELLITE MAP (STREET-SCALE & LOCKED ZOOM) ---
-let leafletMap = null;
-let leafletMarker = null;
-
+// --- MULTIPLAYER SATELLITE MAP SETUP ---
 function initLeafletMap() {
     if (!leafletMap) {
-        // Disabled all zooming controls to lock user at street level
         leafletMap = L.map('map-container', {
             zoomControl: false,
             dragging: false,
@@ -67,78 +65,85 @@ function initLeafletMap() {
             boxZoom: false,
             keyboard: false,
             touchZoom: false
-        }).setView([myData.lat, myData.lng], 18); // Zoom 18 provides ideal street/car scale
+        }).setView([myData.lat, myData.lng], 18);
         
-        // 1. Esri World Imagery Satellite Tiles
+        // 1. Satellite Tiles
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
             attribution: 'Tiles &copy; Esri'
         }).addTo(leafletMap);
 
-        // 2. ArcGIS Reference Labels (Adds street names, places, and neighborhood tags over satellite)
+        // 2. Street Labels
         L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19
         }).addTo(leafletMap);
-
-        createOrUpdateMarker();
-    } else {
-        leafletMap.setView([myData.lat, myData.lng], 18);
-        createOrUpdateMarker();
     }
 }
 
-function createOrUpdateMarker() {
-    let name = nameInput.value.trim() || "Player";
-    let avatarUrl = imageInput.value.trim();
-    let color = myData.color || "#888";
+function updateAllMapMarkers() {
+    if (!leafletMap) return;
 
-    // Scaled down dimensions to look correct relative to real-world streets and future cars
-    let iconCanvas = document.createElement('canvas');
-    iconCanvas.width = 60;
-    iconCanvas.height = 40;
-    let iconCtx = iconCanvas.getContext('2d');
-
-    // Name tag text
-    iconCtx.fillStyle = "#fff";
-    iconCtx.font = "bold 9px sans-serif";
-    iconCtx.textAlign = "center";
-    iconCtx.fillText(name, 30, 9);
-
-    let cubeX = 22;
-    let cubeY = 12;
-    let cubeSize = 16; // Perfectly sized for street-level views
-
-    if (avatarUrl && avatarUrl.startsWith('http')) {
-        if (!loadedImages[avatarUrl]) {
-            let img = new Image();
-            img.crossOrigin = "anonymous";
-            img.src = avatarUrl;
-            loadedImages[avatarUrl] = img;
+    for (let id in allPlayers) {
+        let p = allPlayers[id];
+        if (p.room !== "room_portal_active") {
+            // Remove marker if player left the satellite map
+            if (leafletMarkers[id]) {
+                leafletMap.removeLayer(leafletMarkers[id]);
+                delete leafletMarkers[id];
+            }
+            continue;
         }
-        let imgObj = loadedImages[avatarUrl];
-        if (imgObj.complete && imgObj.naturalWidth !== 0) {
-            iconCtx.drawImage(imgObj, cubeX, cubeY, cubeSize, cubeSize);
+
+        let pName = p.name || "Player";
+        let avatarUrl = p.avatarUrl || "";
+        let color = p.color || "#888";
+
+        let iconCanvas = document.createElement('canvas');
+        iconCanvas.width = 60;
+        iconCanvas.height = 40;
+        let iconCtx = iconCanvas.getContext('2d');
+
+        iconCtx.fillStyle = "#fff";
+        iconCtx.font = "bold 9px sans-serif";
+        iconCtx.textAlign = "center";
+        iconCtx.fillText(pName, 30, 9);
+
+        let cubeX = 22;
+        let cubeY = 12;
+        let cubeSize = 16;
+
+        if (avatarUrl && avatarUrl.startsWith('http')) {
+            if (!loadedImages[avatarUrl]) {
+                let img = new Image();
+                img.crossOrigin = "anonymous";
+                img.src = avatarUrl;
+                loadedImages[avatarUrl] = img;
+            }
+            let imgObj = loadedImages[avatarUrl];
+            if (imgObj.complete && imgObj.naturalWidth !== 0) {
+                iconCtx.drawImage(imgObj, cubeX, cubeY, cubeSize, cubeSize);
+            } else {
+                iconCtx.fillStyle = color;
+                iconCtx.fillRect(cubeX, cubeY, cubeSize, cubeSize);
+            }
         } else {
             iconCtx.fillStyle = color;
             iconCtx.fillRect(cubeX, cubeY, cubeSize, cubeSize);
         }
-    } else {
-        iconCtx.fillStyle = color;
-        iconCtx.fillRect(cubeX, cubeY, cubeSize, cubeSize);
-    }
 
-    let customIcon = L.divIcon({
-        className: 'street-cube-icon',
-        html: iconCanvas,
-        iconSize: [60, 40],
-        iconAnchor: [30, 20]
-    });
+        let customIcon = L.divIcon({
+            className: 'street-cube-icon',
+            html: iconCanvas,
+            iconSize: [60, 40],
+            iconAnchor: [30, 20]
+        });
 
-    if (!leafletMarker) {
-        leafletMarker = L.marker([myData.lat, myData.lng], { icon: customIcon }).addTo(leafletMap);
-    } else {
-        leafletMarker.setLatLng([myData.lat, myData.lng]);
-        leafletMarker.setIcon(customIcon);
+        if (!leafletMarkers[id]) {
+            leafletMarkers[id] = L.marker([p.lat || 30.4278, p.lng || -9.5981], { icon: customIcon }).addTo(leafletMap);
+        } else {
+            leafletMarkers[id].setLatLng([p.lat || 30.4278, p.lng || -9.5981]);
+            leafletMarkers[id].setIcon(customIcon);
+        }
     }
 }
 // ---------------------------------------------------
@@ -191,12 +196,17 @@ const keys = {};
 window.addEventListener("keydown", (e) => {
     if (document.activeElement.tagName === 'INPUT') return;
     let key = e.key.toLowerCase();
-    if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        keys[key] = true;
+    if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key) || e.key === 'Shift') {
+        keys[e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === 'Shift' ? 'shift' : key] = true;
     }
 });
 window.addEventListener("keyup", (e) => {
-    keys[e.key.toLowerCase()] = false;
+    let key = e.key.toLowerCase();
+    if (key === 'shift' || e.key === 'Shift') {
+        keys['shift'] = false;
+    } else {
+        keys[key] = false;
+    }
 });
 
 const myPlayerRef = ref(db, 'players/' + playerId);
@@ -205,6 +215,9 @@ onDisconnect(myPlayerRef).remove();
 const playersRef = ref(db, 'players');
 onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
+    if (myData.room === "room_portal_active") {
+        updateAllMapMarkers();
+    }
 });
 
 // Chat & Python Commands
@@ -243,9 +256,14 @@ onValue(chatRef, (snapshot) => {
 });
 
 function update() {
-    // Smooth GPS movement handling for satellite mode
+    myData.name = nameInput.value.trim() || "Player";
+    myData.avatarUrl = imageInput.value.trim();
+
+    // Satellite Map movement with Sprint support
     if (myData.room === "room_portal_active") {
-        let step = 0.00008; // Delicate micro-step for smooth glide across streets
+        let baseStep = 0.00008;
+        let sprintMultiplier = keys['shift'] ? 2.5 : 1.0; // Holding Shift sprints faster!
+        let step = baseStep * sprintMultiplier;
         let movedMap = false;
 
         if (keys['w'] || keys['arrowup']) { myData.lat += step; movedMap = true; }
@@ -254,15 +272,13 @@ function update() {
         if (keys['d'] || keys['arrowright']) { myData.lng += step; movedMap = true; }
 
         if (movedMap && leafletMap) {
-            // Smoothly pan map view without jerky coordinate jumping
             leafletMap.panTo([myData.lat, myData.lng], { animate: true, duration: 0.1 });
-            createOrUpdateMarker();
             set(myPlayerRef, myData);
         }
         return;
     }
 
-    let speed = 4;
+    let speed = keys['shift'] ? 7 : 4; // Lobby sprint speed
     let moved = false;
 
     if (keys['w'] || keys['arrowup']) { myData.y -= speed; moved = true; }
@@ -278,10 +294,8 @@ function update() {
         canvas.style.display = "none";
         mapContainer.style.display = "block";
         initLeafletMap();
+        set(myPlayerRef, myData);
     }
-
-    myData.name = nameInput.value.trim() || "Player";
-    myData.avatarUrl = imageInput.value.trim();
 
     if (moved || roomChanged || document.activeElement === nameInput || document.activeElement === imageInput) {
         set(myPlayerRef, myData);
