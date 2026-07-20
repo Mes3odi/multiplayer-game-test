@@ -2,7 +2,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, push, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// Your actual Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyCBn-G8DOt82PIVs-j7sdYin3zFv_Z08Uk",
     authDomain: "multiplayer-game-test-e72b8.firebaseapp.com",
@@ -35,10 +34,10 @@ let myData = {
     color: fallbackColor,
     name: nameInput.value,
     avatarUrl: "",
-    room: "room_forest", // Starting room
+    room: "room_forest", 
     width: 32,
     height: 32,
-    // Real-world map coordinates (Agadir, Morocco default)
+    // Agadir, Morocco coordinates
     lat: 30.4278,
     lng: -9.5981
 };
@@ -46,7 +45,6 @@ let myData = {
 let allPlayers = {};
 const loadedImages = {};
 
-// Room Theme Backgrounds & Names (Added World Map Portal Room)
 const rooms = {
     "room_forest": { name: "🌳 Forest Clearing", bg: "#1e3f20" },
     "room_dungeon": { name: "🧱 Stone Dungeon", bg: "#2c3e50" },
@@ -54,40 +52,92 @@ const rooms = {
     "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
 
-// --- LEAFLET REAL-WORLD MAP SETUP ---
+// --- SATELLITE MAP & LOBBY-STYLE CUBE MARKER SETUP ---
 let leafletMap = null;
 let leafletMarker = null;
 
 function initLeafletMap() {
     if (!leafletMap) {
-        leafletMap = L.map('map-container', { zoomControl: false }).setView([myData.lat, myData.lng], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        leafletMap = L.map('map-container', { zoomControl: false }).setView([myData.lat, myData.lng], 16);
+        
+        // Esri World Imagery Satellite Tile Layer
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
-            attribution: '© OpenStreetMap'
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
         }).addTo(leafletMap);
 
-        // Custom player marker on map
-        leafletMarker = L.marker([myData.lat, myData.lng]).addTo(leafletMap)
-            .bindPopup("<b>You are here (Agadir, Morocco)</b>").openPopup();
+        createOrUpdateMarker();
     } else {
-        leafletMap.setView([myData.lat, myData.lng], 15);
-        leafletMarker.setLatLng([myData.lat, myData.lng]);
+        leafletMap.setView([myData.lat, myData.lng], 16);
+        createOrUpdateMarker();
     }
 }
-// ------------------------------------
 
-// --- ZELDA ROOM TRANSITION LOGIC ---
+function createOrUpdateMarker() {
+    let name = nameInput.value.trim() || "Player";
+    let avatarUrl = imageInput.value.trim();
+    let color = myData.color || "#888";
+
+    // Create a mini canvas element to dynamically render the exact same lobby cube + name tag
+    let iconCanvas = document.createElement('canvas');
+    iconCanvas.width = 100;
+    iconCanvas.height = 60;
+    let iconCtx = iconCanvas.getContext('2d');
+
+    // Draw Name Tag on top
+    iconCtx.fillStyle = "#fff";
+    iconCtx.font = "bold 11px sans-serif";
+    iconCtx.textAlign = "center";
+    iconCtx.fillText(name, 50, 12);
+
+    let cubeX = 34;
+    let cubeY = 18;
+    let cubeSize = 32;
+
+    // Draw Lobby Cube (Image or Color)
+    if (avatarUrl && avatarUrl.startsWith('http')) {
+        if (!loadedImages[avatarUrl]) {
+            let img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = avatarUrl;
+            loadedImages[avatarUrl] = img;
+        }
+        let imgObj = loadedImages[avatarUrl];
+        if (imgObj.complete && imgObj.naturalWidth !== 0) {
+            iconCtx.drawImage(imgObj, cubeX, cubeY, cubeSize, cubeSize);
+        } else {
+            iconCtx.fillStyle = color;
+            iconCtx.fillRect(cubeX, cubeY, cubeSize, cubeSize);
+        }
+    } else {
+        iconCtx.fillStyle = color;
+        iconCtx.fillRect(cubeX, cubeY, cubeSize, cubeSize);
+    }
+
+    let customIcon = L.divIcon({
+        className: 'lobby-cube-icon',
+        html: iconCanvas,
+        iconSize: [100, 60],
+        iconAnchor: [50, 34] // centers the cube right on the GPS coordinate
+    });
+
+    if (!leafletMarker) {
+        leafletMarker = L.marker([myData.lat, myData.lng], { icon: customIcon }).addTo(leafletMap);
+    } else {
+        leafletMarker.setLatLng([myData.lat, myData.lng]);
+        leafletMarker.setIcon(customIcon);
+    }
+}
+// ---------------------------------------------------
+
 function checkRoomTransition() {
     let changed = false;
-
-    // Hit Right Edge
     if (myData.x > canvas.width - myData.width) {
         if (myData.room === "room_forest") { myData.room = "room_dungeon"; myData.x = 10; changed = true; }
         else if (myData.room === "room_dungeon") { myData.room = "room_python"; myData.x = 10; changed = true; }
         else if (myData.room === "room_python") { myData.room = "room_portal"; myData.x = 10; changed = true; }
         else { myData.x = canvas.width - myData.width; }
     }
-    // Hit Left Edge
     else if (myData.x < 0) {
         if (myData.room === "room_portal") { myData.room = "room_python"; myData.x = canvas.width - 40; changed = true; }
         else if (myData.room === "room_python") { myData.room = "room_dungeon"; myData.x = canvas.width - 40; changed = true; }
@@ -96,12 +146,10 @@ function checkRoomTransition() {
     }
     else if (myData.y > canvas.height - myData.height) { myData.y = canvas.height - myData.height; }
     else if (myData.y < 0) { myData.y = 0; }
-
     return changed;
 }
-// -----------------------------------
 
-// --- PYTHON INTERPRETER LOGIC ---
+// Python Interpreter
 let pythonOutputLines = [
     "> Python 3.11.4 Environment Initialized",
     "> Type python commands below (e.g., print('Hello'))"
@@ -125,20 +173,20 @@ function evaluatePythonCode(code) {
     pythonOutputLines.push(String(result));
     if (pythonOutputLines.length > 8) { pythonOutputLines.shift(); pythonOutputLines.shift(); }
 }
-// --------------------------------
 
 const keys = {};
 window.addEventListener("keydown", (e) => {
-    // If inside World Map mode, use arrow keys to pan/move across Agadir!
+    // If in Satellite Map view, pan around Agadir using WASD or arrow keys!
     if (myData.room === "room_portal_active") {
-        let step = 0.001; // map movement speed
+        let step = 0.0008;
         if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') myData.lat += step;
         if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') myData.lat -= step;
         if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') myData.lng -= step;
         if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') myData.lng += step;
-        if (leafletMap && leafletMarker) {
+        
+        if (leafletMap) {
             leafletMap.setView([myData.lat, myData.lng]);
-            leafletMarker.setLatLng([myData.lat, myData.lng]);
+            createOrUpdateMarker();
         }
         return;
     }
@@ -161,7 +209,7 @@ onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
 });
 
-// Chat & Python Command Sync
+// Chat & Python Commands
 const chatMessagesEl = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -196,9 +244,8 @@ onValue(chatRef, (snapshot) => {
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 });
 
-// Game loop update
 function update() {
-    if (myData.room === "room_portal_active") return; // Handled by map pan keys
+    if (myData.room === "room_portal_active") return;
 
     let speed = 4;
     let moved = false;
@@ -210,7 +257,7 @@ function update() {
 
     let roomChanged = checkRoomTransition();
 
-    // Check if player stepped into the portal in "room_portal" (center of room)
+    // Portal activation check in Portal Hub room
     if (myData.room === "room_portal" && myData.x > 350 && myData.x < 450 && myData.y > 180 && myData.y < 260) {
         myData.room = "room_portal_active";
         canvas.style.display = "none";
@@ -226,7 +273,6 @@ function update() {
     }
 }
 
-// Draw graphics based on active room
 function draw() {
     if (myData.room === "room_portal_active") return;
 
@@ -235,7 +281,6 @@ function draw() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Room Name Header
     ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
     ctx.fillRect(10, 10, 240, 30);
     ctx.fillStyle = "#fff";
@@ -243,7 +288,6 @@ function draw() {
     ctx.textAlign = "left";
     ctx.fillText(currentRoomInfo.name, 20, 30);
 
-    // Python Room Terminal Board
     if (myData.room === "room_python") {
         ctx.fillStyle = "#111";
         ctx.fillRect(180, 50, 440, 220);
@@ -265,7 +309,6 @@ function draw() {
         }
     }
 
-    // Portal Room Portal Graphics
     if (myData.room === "room_portal") {
         ctx.fillStyle = "#00ffff";
         ctx.beginPath();
@@ -274,10 +317,9 @@ function draw() {
         ctx.fillStyle = "#000";
         ctx.font = "bold 12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("ENTER PORTAL", 400, 224);
+        ctx.fillText("ENTER SATELLITE", 400, 224);
     }
 
-    // Draw Players
     for (let id in allPlayers) {
         let p = allPlayers[id];
         if (p.room !== myData.room) continue;
