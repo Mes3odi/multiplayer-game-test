@@ -2,7 +2,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, push, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// Your actual Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyCBn-G8DOt82PIVs-j7sdYin3zFv_Z08Uk",
     authDomain: "multiplayer-game-test-e72b8.firebaseapp.com",
@@ -14,11 +13,9 @@ const firebaseConfig = {
     measurementId: "G-MXZMBNWZ8B"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Canvas & UI Setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -32,9 +29,7 @@ const cinemaScreen = document.getElementById('cinema-screen');
 const cinemaControls = document.getElementById('cinema-controls');
 const ytInput = document.getElementById('yt-input');
 const ytSetBtn = document.getElementById('yt-set-btn');
-const ytIframe = document.getElementById('yt-iframe');
 
-// Unique ID for this browser session
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
 const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
 
@@ -52,16 +47,38 @@ let myData = {
 let allPlayers = {};
 const loadedImages = {};
 
-// --- STABLE IFRAME SYNC LOGIC ---
+// --- YOUTUBE API SYNC ENGINE ---
+let ytPlayer = null;
+let isSettingFromFirebase = false;
+
+window.onYouTubeIframeAPIReady = function() {
+    ytPlayer = new YT.Player('youtube-player', {
+        height: '100%',
+        width: '100%',
+        videoId: '',
+        playerVars: {
+            'autoplay': 1,
+            'controls': 1,
+            'enablejsapi': 1
+        },
+        events: {
+            'onStateChange': onPlayerStateChange
+        }
+    });
+};
+
 const cinemaRef = ref(db, 'cinema');
 
+// When user clicks "Play Video" button with a link
 ytSetBtn.addEventListener('click', () => {
     let url = ytInput.value.trim();
     let videoId = extractYouTubeId(url);
     if (videoId) {
         set(cinemaRef, {
             videoId: videoId,
-            startedAt: Date.now()
+            time: 0,
+            state: YT.PlayerState.PLAYING,
+            updatedAt: Date.now()
         });
         ytInput.value = "";
     } else {
@@ -69,13 +86,70 @@ ytSetBtn.addEventListener('click', () => {
     }
 });
 
+// Capture local player actions (Play/Pause/Seek) to sync to others
+function onPlayerStateChange(event) {
+    if (isSettingFromFirebase) return;
+    if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+
+    let state = event.data;
+    // States: 1 = Playing, 2 = Paused
+    if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED) {
+        let currentTime = ytPlayer.getCurrentTime();
+        let videoData = ytPlayer.getVideoData();
+        if (videoData && videoData.video_id) {
+            set(cinemaRef, {
+                videoId: videoData.video_id,
+                time: currentTime,
+                state: state,
+                updatedAt: Date.now()
+            });
+        }
+    }
+}
+
+// Listen for updates from Firebase across all users
 onValue(cinemaRef, (snapshot) => {
     let data = snapshot.val();
-    if (data && data.videoId) {
-        let elapsedSeconds = Math.floor((Date.now() - (data.startedAt || Date.now())) / 1000);
-        // Load video directly with start parameter for precise syncing across devices
-        ytIframe.src = `https://www.youtube.com/embed/${data.videoId}?autoplay=1&start=${elapsedSeconds}`;
+    if (!data || !ytPlayer || typeof ytPlayer.loadVideoById !== 'function') return;
+
+    isSettingFromFirebase = true;
+
+    let serverVideoId = data.videoId;
+    let serverState = data.state;
+    let serverTime = data.time || 0;
+    let updatedAt = data.updatedAt || Date.now();
+
+    // Calculate time elapsed if it was playing
+    let targetTime = serverTime;
+    if (serverState === YT.PlayerState.PLAYING) {
+        let elapsed = (Date.now() - updatedAt) / 1000;
+        targetTime += elapsed;
     }
+
+    let currentVideoId = "";
+    try {
+        let vData = ytPlayer.getVideoData();
+        if (vData) currentVideoId = vData.video_id;
+    } catch(e) {}
+
+    // Load video if it's different or sync time if out of sync by more than 2 seconds
+    let localTime = 0;
+    try { localTime = ytPlayer.getCurrentTime(); } catch(e) {}
+
+    if (currentVideoId !== serverVideoId) {
+        ytPlayer.loadVideoById({ videoId: serverVideoId, startSeconds: targetTime });
+    } else if (Math.abs(localTime - targetTime) > 2) {
+        ytPlayer.seekTo(targetTime, true);
+    }
+
+    // Apply Play/Pause state match
+    if (serverState === YT.PlayerState.PLAYING) {
+        ytPlayer.playVideo();
+    } else if (serverState === YT.PlayerState.PAUSED) {
+        ytPlayer.pauseVideo();
+    }
+
+    setTimeout(() => { isSettingFromFirebase = false; }, 500);
 });
 
 function extractYouTubeId(url) {
@@ -83,23 +157,20 @@ function extractYouTubeId(url) {
     let match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
 }
-// -------------------------------
+// -----------------------------
 
-// Keyboard tracking with input block guard
 const keys = {};
 window.addEventListener("keydown", (e) => {
     if (document.activeElement.tagName === 'INPUT') return;
-    const key = e.key.toLowerCase();
+    let key = e.key.toLowerCase();
     if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
         keys[key] = true;
     }
 });
 window.addEventListener("keyup", (e) => {
-    const key = e.key.toLowerCase();
-    keys[key] = false;
+    keys[e.key.toLowerCase()] = false;
 });
 
-// Database references
 const myPlayerRef = ref(db, 'players/' + playerId);
 onDisconnect(myPlayerRef).remove();
 
@@ -108,7 +179,6 @@ onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
 });
 
-// Room Switcher Logic
 btnGame.addEventListener('click', () => {
     myData.room = "game";
     btnGame.classList.add('active');
@@ -129,7 +199,6 @@ btnCinema.addEventListener('click', () => {
     set(myPlayerRef, myData);
 });
 
-// --- CHAT SYSTEM LOGIC ---
 const chatMessagesEl = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
@@ -137,20 +206,18 @@ const chatRef = ref(db, 'chats');
 
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const text = chatInput.value.trim();
+    let text = chatInput.value.trim();
     if (text === '') return;
-
     push(chatRef, {
         name: nameInput.value.trim() || "Player",
         text: text,
         timestamp: Date.now()
     });
-
     chatInput.value = '';
 });
 
 onValue(chatRef, (snapshot) => {
-    const chats = snapshot.val() || {};
+    let chats = snapshot.val() || {};
     chatMessagesEl.innerHTML = '';
     for (let id in chats) {
         let msg = chats[id];
@@ -160,9 +227,7 @@ onValue(chatRef, (snapshot) => {
     }
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 });
-// -------------------------
 
-// Game loop update
 function update() {
     let speed = 4;
     let moved = false;
@@ -183,7 +248,6 @@ function update() {
     }
 }
 
-// Draw graphics based on active room
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
