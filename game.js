@@ -18,19 +18,25 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Canvas Setup
+// Canvas & UI Setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Unique ID for this browser tab
-const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
-const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
-
-// UI Elements
 const nameInput = document.getElementById('name-input');
 nameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
-
 const imageInput = document.getElementById('image-input');
+
+const btnGame = document.getElementById('btn-game');
+const btnCinema = document.getElementById('btn-cinema');
+const cinemaScreen = document.getElementById('cinema-screen');
+const cinemaControls = document.getElementById('cinema-controls');
+const ytInput = document.getElementById('yt-input');
+const ytSetBtn = document.getElementById('yt-set-btn');
+const ytIframe = document.getElementById('yt-iframe');
+
+// Unique ID for this browser session
+const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
+const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
 
 let myData = {
     x: Math.random() * (canvas.width - 40),
@@ -38,21 +44,30 @@ let myData = {
     color: fallbackColor,
     name: nameInput.value,
     avatarUrl: "",
+    room: "game", // "game" or "cinema"
     width: 32,
     height: 32
 };
 
 let allPlayers = {};
-const loadedImages = {}; // Cache for player character images
+const loadedImages = {};
 
-// Keyboard tracking
+// --- FIXED KEYBOARD LOGIC ---
 const keys = {};
 window.addEventListener("keydown", (e) => {
-    // Don't move character if typing in name or chat boxes
+    // CRITICAL FIX: If user is typing in ANY input field, ignore WASD movement entirely
     if (document.activeElement.tagName === 'INPUT') return;
-    keys[e.key.toLowerCase()] = true;
+    
+    const key = e.key.toLowerCase();
+    if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        keys[key] = true;
+    }
 });
-window.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+window.addEventListener("keyup", (e) => {
+    const key = e.key.toLowerCase();
+    keys[key] = false;
+});
+// ----------------------------
 
 // Database references
 const myPlayerRef = ref(db, 'players/' + playerId);
@@ -62,6 +77,54 @@ const playersRef = ref(db, 'players');
 onValue(playersRef, (snapshot) => {
     allPlayers = snapshot.val() || {};
 });
+
+// Room Switcher Logic
+btnGame.addEventListener('click', () => {
+    myData.room = "game";
+    btnGame.classList.add('active');
+    btnCinema.classList.remove('active');
+    canvas.style.display = "block";
+    cinemaScreen.style.display = "none";
+    cinemaControls.style.display = "none";
+    ytIframe.src = ""; // Stop video audio when leaving
+    set(myPlayerRef, myData);
+});
+
+btnCinema.addEventListener('click', () => {
+    myData.room = "cinema";
+    btnCinema.classList.add('active');
+    btnGame.classList.remove('active');
+    canvas.style.display = "block"; // Keep canvas running for theater seats
+    cinemaScreen.style.display = "block";
+    cinemaControls.style.display = "block";
+    set(myPlayerRef, myData);
+});
+
+// YouTube Sync Logic in Cinema Room
+const cinemaRef = ref(db, 'cinema/currentVideo');
+ytSetBtn.addEventListener('click', () => {
+    let url = ytInput.value.trim();
+    let videoId = extractYouTubeId(url);
+    if (videoId) {
+        set(cinemaRef, videoId);
+        ytInput.value = "";
+    } else {
+        alert("Please paste a valid YouTube link!");
+    }
+});
+
+onValue(cinemaRef, (snapshot) => {
+    let vidId = snapshot.val();
+    if (vidId) {
+        ytIframe.src = `https://www.youtube.com/embed/${vidId}?autoplay=1`;
+    }
+});
+
+function extractYouTubeId(url) {
+    let regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    let match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+}
 
 // --- CHAT SYSTEM LOGIC ---
 const chatMessagesEl = document.getElementById('chat-messages');
@@ -106,32 +169,42 @@ function update() {
     if (keys['a'] || keys['arrowleft']) { myData.x -= speed; moved = true; }
     if (keys['d'] || keys['arrowright']) { myData.x += speed; moved = true; }
 
-    // Screen bounds
     myData.x = Math.max(0, Math.min(canvas.width - myData.width, myData.x));
     myData.y = Math.max(0, Math.min(canvas.height - myData.height, myData.y));
 
-    // Update custom name & avatar link from input fields live
     myData.name = nameInput.value.trim() || "Player";
     myData.avatarUrl = imageInput.value.trim();
 
-    if (moved || nameInput === document.activeElement || imageInput === document.activeElement) {
+    if (moved || document.activeElement === nameInput || document.activeElement === imageInput) {
         set(myPlayerRef, myData);
     }
 }
 
-// Draw graphics & character pictures
+// Draw graphics based on active room
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // If in Cinema Room, draw theater seats decoration on canvas
+    if (myData.room === "cinema") {
+        ctx.fillStyle = "#332211";
+        // Draw rows of seats facing the center screen
+        for (let row = 320; row < 420; row += 35) {
+            for (let col = 100; col < 750; col += 60) {
+                ctx.fillRect(col, row, 40, 20);
+            }
+        }
+    }
+
+    // Draw all players who are in the SAME room as you
     for (let id in allPlayers) {
         let p = allPlayers[id];
+        if (p.room !== myData.room) continue; // Skip players in other rooms
+
         let pName = p.name || "Player";
         let pWidth = p.width || 32;
         let pHeight = p.height || 32;
 
-        // Check if player provided a valid image URL
         if (p.avatarUrl && p.avatarUrl.startsWith('http')) {
-            // Load and cache the image
             if (!loadedImages[p.avatarUrl]) {
                 let img = new Image();
                 img.src = p.avatarUrl;
@@ -140,20 +213,17 @@ function draw() {
 
             let imgObj = loadedImages[p.avatarUrl];
             if (imgObj.complete && imgObj.naturalWidth !== 0) {
-                // Draw custom character image
                 ctx.drawImage(imgObj, p.x, p.y, pWidth, pHeight);
             } else {
-                // Fallback box while image loads
                 ctx.fillStyle = p.color || "#888";
                 ctx.fillRect(p.x, p.y, pWidth, pHeight);
             }
         } else {
-            // Default colored square if no image link is provided
             ctx.fillStyle = p.color || "#888";
             ctx.fillRect(p.x, p.y, pWidth, pHeight);
         }
 
-        // Draw player name above the character
+        // Draw name above avatar
         ctx.fillStyle = "#fff";
         ctx.font = "11px sans-serif";
         ctx.textAlign = "center";
