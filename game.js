@@ -1,17 +1,25 @@
-// TODO: Replace this with your own Firebase project configuration
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCBn-G8DOt82PIVs-j7sdYin3zFv_Z08Uk",
+  authDomain: "multiplayer-game-test-e72b8.firebaseapp.com",
+  databaseURL: "https://multiplayer-game-test-e72b8-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "multiplayer-game-test-e72b8",
+  storageBucket: "multiplayer-game-test-e72b8.firebasestorage.app",
+  messagingSenderId: "17838862618",
+  appId: "1:17838862618:web:385700614b276d764c3ca3",
+  measurementId: "G-MXZMBNWZ8B"
 };
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
 // Canvas Setup
 const canvas = document.getElementById("gameCanvas");
