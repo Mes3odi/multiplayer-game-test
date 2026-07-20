@@ -1,6 +1,6 @@
 // Import Firebase SDKs
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, push, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getDatabase, ref, set, push, onValue, onDisconnect, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCBn-G8DOt82PIVs-j7sdYin3zFv_Z08Uk",
@@ -20,10 +20,19 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 const viewport = document.getElementById("viewport");
 const mapContainer = document.getElementById("map-container");
+const setupOverlay = document.getElementById("setup-overlay");
+const joinBtn = document.getElementById("join-btn");
+const setupName = document.getElementById("setup-name");
+const setupImage = document.getElementById("setup-image");
+const setupDevice = document.getElementById("setup-device");
+const displayPlayerInfo = document.getElementById("display-player-info");
+const mobileControls = document.getElementById("mobile-controls");
+const mapUiOverlay = document.getElementById("map-ui-overlay");
+const onlinePlayersListEl = document.getElementById("online-players-list");
+const onlineCountEl = document.getElementById("online-count");
 
-const nameInput = document.getElementById('name-input');
-nameInput.value = "Player_" + Math.floor(Math.random() * 900 + 100);
-const imageInput = document.getElementById('image-input');
+// Random default name generator
+setupName.value = "Player_" + Math.floor(Math.random() * 900 + 100);
 
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
 const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
@@ -32,20 +41,24 @@ let myData = {
     x: 400,
     y: 220,
     color: fallbackColor,
-    name: nameInput.value,
+    name: "Player",
     avatarUrl: "",
     room: "room_forest", 
     width: 32,
     height: 32,
-    // Agadir, Morocco coordinates
     lat: 30.4278,
     lng: -9.5981
 };
 
+let isMobile = false;
 let allPlayers = {};
-const loadedImages = {};
+let loadedImages = {};
 let leafletMap = null;
-let leafletMarkers = {}; // Tracks map markers for all connected players
+let leafletMarkers = {};
+let drawingPolylines = {};
+let currentTool = "move"; // "move" or "draw"
+let isDrawingActive = false;
+let currentLinePoints = [];
 
 const rooms = {
     "room_forest": { name: "🌳 Forest Clearing", bg: "#1e3f20" },
@@ -54,7 +67,24 @@ const rooms = {
     "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
 
-// --- MULTIPLAYER SATELLITE MAP SETUP ---
+// Join Game Menu Handler
+joinBtn.addEventListener('click', () => {
+    let nameVal = setupName.value.trim();
+    if (nameVal) myData.name = nameVal;
+    myData.avatarUrl = setupImage.value.trim();
+    isMobile = (setupDevice.value === "mobile");
+
+    displayPlayerInfo.innerText = myData.name;
+    setupOverlay.style.display = "none";
+
+    if (isMobile) {
+        mobileControls.style.display = "flex";
+    }
+
+    set(ref(db, 'players/' + playerId), myData);
+});
+
+// --- SATELLITE MAP & PERMANENT DRAWING SETUP ---
 function initLeafletMap() {
     if (!leafletMap) {
         leafletMap = L.map('map-container', {
@@ -67,32 +97,93 @@ function initLeafletMap() {
             touchZoom: false
         }).setView([myData.lat, myData.lng], 18);
         
-        // 1. Satellite Tiles
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19,
             attribution: 'Tiles &copy; Esri'
         }).addTo(leafletMap);
 
-        // 2. Street Labels
         L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 19
         }).addTo(leafletMap);
+
+        // Map Click handling for drawing tool
+        leafletMap.on('click', (e) => {
+            if (currentTool === "draw") {
+                let newPoint = [e.latlng.lat, e.latlng.lng];
+                currentLinePoints.push(newPoint);
+                if (currentLinePoints.length >= 2) {
+                    // Push permanent line to Firebase
+                    push(ref(db, 'drawings'), {
+                        points: currentLinePoints,
+                        color: myData.color
+                    });
+                    currentLinePoints = [];
+                }
+            }
+        });
     }
 }
+
+// Tool Selection Buttons
+document.getElementById('tool-move').addEventListener('click', () => {
+    currentTool = "move";
+    document.getElementById('tool-move').classList.add('active');
+    document.getElementById('tool-draw').classList.remove('active');
+});
+document.getElementById('tool-draw').addEventListener('click', () => {
+    currentTool = "draw";
+    document.getElementById('tool-draw').classList.add('active');
+    document.getElementById('tool-move').classList.remove('active');
+});
+document.getElementById('clear-drawings').addEventListener('click', () => {
+    if (confirm("Clear all permanent map drawings?")) {
+        remove(ref(db, 'drawings'));
+    }
+});
+
+// Listen to Permanent Drawings from Firebase
+const drawingsRef = ref(db, 'drawings');
+onValue(drawingsRef, (snapshot) => {
+    let data = snapshot.val() || {};
+    // Clear old visual polylines
+    for (let id in drawingPolylines) {
+        if (leafletMap) leafletMap.removeLayer(drawingPolylines[id]);
+    }
+    drawingPolylines = {};
+
+    for (let id in data) {
+        let lineData = data[id];
+        if (lineData && lineData.points && leafletMap) {
+            let polyline = L.polyline(lineData.points, { color: lineData.color || '#2ecc71', weight: 4 }).addTo(leafletMap);
+            // Allow anyone to click and delete a drawing line permanently
+            polyline.on('click', () => {
+                if (confirm("Delete this drawing line?")) {
+                    remove(ref(db, 'drawings/' + id));
+                }
+            });
+            drawingPolylines[id] = polyline;
+        }
+    }
+});
 
 function updateAllMapMarkers() {
     if (!leafletMap) return;
 
+    let onlineListHTML = "";
+    let count = 0;
+
     for (let id in allPlayers) {
         let p = allPlayers[id];
         if (p.room !== "room_portal_active") {
-            // Remove marker if player left the satellite map
             if (leafletMarkers[id]) {
                 leafletMap.removeLayer(leafletMarkers[id]);
                 delete leafletMarkers[id];
             }
             continue;
         }
+
+        count++;
+        onlineListHTML += `<div>🟢 ${p.name || "Player"}</div>`;
 
         let pName = p.name || "Player";
         let avatarUrl = p.avatarUrl || "";
@@ -145,6 +236,9 @@ function updateAllMapMarkers() {
             leafletMarkers[id].setIcon(customIcon);
         }
     }
+
+    onlineCountEl.innerText = count;
+    onlinePlayersListEl.innerHTML = onlineListHTML;
 }
 // ---------------------------------------------------
 
@@ -196,7 +290,7 @@ const keys = {};
 window.addEventListener("keydown", (e) => {
     if (document.activeElement.tagName === 'INPUT') return;
     let key = e.key.toLowerCase();
-    if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key) || e.key === 'Shift') {
+    if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) || e.key === 'Shift') {
         keys[e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === 'Shift' ? 'shift' : key] = true;
     }
 });
@@ -208,6 +302,22 @@ window.addEventListener("keyup", (e) => {
         keys[key] = false;
     }
 });
+
+// Mobile On-screen Touch Button bindings
+function bindTouchButton(id, keyName) {
+    let el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+    el.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+    el.addEventListener('mousedown', (e) => { keys[keyName] = true; });
+    el.addEventListener('mouseup', (e) => { keys[keyName] = false; });
+}
+
+bindTouchButton('btn-up', 'w');
+bindTouchButton('btn-left', 'a');
+bindTouchButton('btn-down', 's');
+bindTouchButton('btn-right', 'd');
+bindTouchButton('btn-sprint', 'shift');
 
 const myPlayerRef = ref(db, 'players/' + playerId);
 onDisconnect(myPlayerRef).remove();
@@ -236,7 +346,7 @@ chatForm.addEventListener('submit', (e) => {
     }
 
     push(chatRef, {
-        name: nameInput.value.trim() || "Player",
+        name: myData.name,
         text: text,
         timestamp: Date.now()
     });
@@ -256,13 +366,13 @@ onValue(chatRef, (snapshot) => {
 });
 
 function update() {
-    myData.name = nameInput.value.trim() || "Player";
-    myData.avatarUrl = imageInput.value.trim();
+    if (setupOverlay.style.display !== "none") return;
 
-    // Satellite Map movement with Sprint support
     if (myData.room === "room_portal_active") {
+        if (currentTool === "draw") return; // disable movement while drawing
+
         let baseStep = 0.00008;
-        let sprintMultiplier = keys['shift'] ? 2.5 : 1.0; // Holding Shift sprints faster!
+        let sprintMultiplier = keys['shift'] ? 2.5 : 1.0;
         let step = baseStep * sprintMultiplier;
         let movedMap = false;
 
@@ -278,7 +388,7 @@ function update() {
         return;
     }
 
-    let speed = keys['shift'] ? 7 : 4; // Lobby sprint speed
+    let speed = keys['shift'] ? 7 : 4;
     let moved = false;
 
     if (keys['w'] || keys['arrowup']) { myData.y -= speed; moved = true; }
@@ -293,17 +403,18 @@ function update() {
         myData.room = "room_portal_active";
         canvas.style.display = "none";
         mapContainer.style.display = "block";
+        mapUiOverlay.style.display = "flex";
         initLeafletMap();
         set(myPlayerRef, myData);
     }
 
-    if (moved || roomChanged || document.activeElement === nameInput || document.activeElement === imageInput) {
+    if (moved || roomChanged) {
         set(myPlayerRef, myData);
     }
 }
 
 function draw() {
-    if (myData.room === "room_portal_active") return;
+    if (myData.room === "room_portal_active" || setupOverlay.style.display !== "none") return;
 
     let currentRoomInfo = rooms[myData.room] || rooms["room_forest"];
     viewport.style.background = currentRoomInfo.bg;
