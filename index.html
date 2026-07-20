@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Firebase Multiplayer - Game & Cinema</title>
+    <title>GitHub Firebase Multiplayer - Synced Cinema</title>
     <style>
         html, body {
             margin: 0;
@@ -49,7 +49,6 @@
         }
         .room-btn:hover { background: #444; }
 
-        /* Container for Game or Cinema */
         #viewport {
             position: relative;
             width: 800px;
@@ -73,10 +72,9 @@
             border: 4px solid #333;
             display: none;
         }
-        #cinema-screen iframe {
+        #youtube-player {
             width: 100%;
             height: 100%;
-            border: none;
         }
         #cinema-controls {
             position: absolute;
@@ -154,7 +152,8 @@
         
         <!-- Cinema Elements -->
         <div id="cinema-screen">
-            <iframe id="yt-iframe" src="" allowfullscreen></iframe>
+            <!-- Official YouTube IFrame Player API Container -->
+            <div id="youtube-player"></div>
         </div>
         <div id="cinema-controls">
             <input type="text" id="yt-input" placeholder="Paste YouTube link here (e.g. https://youtu.be/...)">
@@ -170,10 +169,8 @@
         </form>
     </div>
 
-    <!-- Load Game Script as a Module -->
-    <script type="module" src="game.js"></script>
-</body>
-</html>
+    <!-- Load Official YouTube IFrame API Script -->
+    <script src="https://www.youtube.com/iframe_api"></script>
 
     <!-- Load Game Script as a Module -->
     <script type="module" src="game.js"></script>
