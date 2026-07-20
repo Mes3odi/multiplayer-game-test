@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Firebase Multiplayer - Zelda Rooms & Python Lab</title>
+    <title>GitHub Firebase Multiplayer - Zelda Rooms, Python Lab & World Map</title>
+    <!-- Leaflet CSS for Real World Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html, body {
             margin: 0;
@@ -43,12 +45,23 @@
             position: relative;
             width: 800px;
             height: 440px;
-            background: #1e3f20; /* Zelda forest green default */
+            background: #1e3f20;
             border: 3px solid #555;
             box-shadow: 0 0 20px rgba(0,0,0,0.6);
         }
         canvas {
             display: block;
+        }
+
+        /* Real-World Map Container */
+        #map-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            z-index: 10;
         }
 
         /* Chat Box Styling */
@@ -103,21 +116,24 @@
         <input type="text" id="name-input" value="Player" maxlength="12">
         <span>Avatar URL:</span>
         <input type="text" id="image-input" placeholder="Optional image link">
-        <span style="color: #2ecc71; font-weight: bold;">💡 Tip: Walk off screen edges to switch rooms! Type Python code in chat!</span>
+        <span style="color: #2ecc71; font-weight: bold;">💡 Walk to the Map Room & enter the portal!</span>
     </div>
 
     <div id="viewport">
         <canvas id="gameCanvas" width="800" height="440"></canvas>
+        <div id="map-container"></div>
     </div>
 
     <div id="chat-container">
         <div id="chat-messages"></div>
         <form id="chat-form">
-            <input type="text" id="chat-input" placeholder="Type a chat message or Python code (e.g. print('Hello World'))..." autocomplete="off">
+            <input type="text" id="chat-input" placeholder="Type a chat message or Python code..." autocomplete="off">
             <button type="submit" id="chat-send">Send</button>
         </form>
     </div>
 
+    <!-- Leaflet JS for Real World Map -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Load Game Script as a Module -->
     <script type="module" src="game.js"></script>
 </body>
