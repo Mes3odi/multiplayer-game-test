@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Firebase Multiplayer - Smooth Satellite Streets with Sprint</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GitHub Firebase Multiplayer - Ultimate Agadir Edition</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -20,26 +20,74 @@
             align-items: center;
             justify-content: center;
             overflow: hidden;
+            touch-action: none;
         }
-        #top-bar {
-            margin-bottom: 8px;
+
+        /* --- PRE-JOIN MENU OVERLAY --- */
+        #setup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 10, 0.95);
             display: flex;
-            gap: 12px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .setup-box {
+            background: #1a1a1a;
+            border: 2px solid #444;
+            padding: 25px;
+            border-radius: 8px;
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            text-align: center;
+        }
+        .setup-box h2 { margin: 0 0 5px 0; color: #2ecc71; font-size: 20px; }
+        .setup-box label { font-size: 12px; color: #aaa; text-align: left; }
+        .setup-box input, .setup-box select {
+            background: #111;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        #join-btn {
+            background: #2ecc71;
+            color: #000;
+            border: none;
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        #join-btn:hover { background: #27ae60; }
+        .refresh-note {
+            font-size: 11px;
+            color: #777;
+            margin-top: 10px;
+        }
+
+        #top-bar {
+            margin-bottom: 6px;
+            display: flex;
+            gap: 15px;
             align-items: center;
             font-size: 13px;
             color: #aaa;
         }
-        input {
-            background: #222;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            outline: none;
-        }
-        #name-input { width: 110px; }
-        #image-input { width: 160px; }
 
         #viewport {
             position: relative;
@@ -49,9 +97,7 @@
             border: 3px solid #555;
             box-shadow: 0 0 20px rgba(0,0,0,0.6);
         }
-        canvas {
-            display: block;
-        }
+        canvas { display: block; }
 
         /* Real-World Satellite Map Container */
         #map-container {
@@ -64,6 +110,101 @@
             z-index: 10;
         }
 
+        /* --- UI OVERLAYS FOR SATELLITE MAP --- */
+        #map-ui-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            width: 220px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .ui-section-title { font-size: 12px; font-weight: bold; color: #2ecc71; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 5px; }
+        #online-players-list { font-size: 11px; color: #ddd; display: flex; flex-direction: column; gap: 3px; }
+        
+        .map-tools {
+            display: flex;
+            gap: 5px;
+        }
+        .map-btn {
+            flex: 1;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            font-size: 11px;
+            border-radius: 3px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .map-btn.active { background: #2ecc71; color: #000; font-weight: bold; }
+
+        /* --- MOBILE CONTROLS OVERLAY --- */
+        #mobile-controls {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            display: none;
+            justify-content: space-between;
+            align-items: flex-end;
+            z-index: 30;
+            pointer-events: none;
+        }
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 45px);
+            grid-template-rows: repeat(2, 45px);
+            gap: 4px;
+            pointer-events: auto;
+        }
+        .dpad-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .dpad-btn:active { background: rgba(255, 255, 255, 0.5); }
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+
+        .action-pad {
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        .action-btn {
+            width: 55px;
+            height: 55px;
+            background: rgba(46, 204, 113, 0.3);
+            border: 2px solid #2ecc71;
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .action-btn:active { background: rgba(46, 204, 113, 0.7); }
+
         /* Chat Box Styling */
         #chat-container {
             width: 800px;
@@ -73,7 +214,7 @@
             border-radius: 4px;
             display: flex;
             flex-direction: column;
-            height: 110px;
+            height: 100px;
         }
         #chat-messages {
             flex: 1;
@@ -111,17 +252,64 @@
 </head>
 <body>
 
+    <!-- PRE-JOIN SETUP SCREEN -->
+    <div id="setup-overlay">
+        <div class="setup-box">
+            <h2>Agadir Multiplayer</h2>
+            <div>
+                <label>Your Name:</label>
+                <input type="text" id="setup-name" maxlength="12" placeholder="Enter name...">
+            </div>
+            <div>
+                <label>Avatar Image URL (Optional):</label>
+                <input type="text" id="setup-image" placeholder="https://... (or leave blank)">
+            </div>
+            <div>
+                <label>Device Type:</label>
+                <select id="setup-device">
+                    <option value="pc">PC (Keyboard / WASD)</option>
+                    <option value="mobile">Mobile (On-screen Buttons)</option>
+                </select>
+            </div>
+            <button id="join-btn">JOIN GAME</button>
+            <div class="refresh-note">Note: If something doesn't work, click <b>CTRL + F5</b> to hard refresh.</div>
+        </div>
+    </div>
+
     <div id="top-bar">
-        <span>Name:</span>
-        <input type="text" id="name-input" value="Player" maxlength="12">
-        <span>Avatar URL:</span>
-        <input type="text" id="image-input" placeholder="Optional image link">
-        <span style="color: #2ecc71; font-weight: bold;">🛰️ Hold SHIFT to Sprint! Walk into Portal for Agadir!</span>
+        <span id="display-player-info" style="color: #2ecc71; font-weight: bold;">Player</span>
+        <span>🛰️ Walk into Portal Hub to enter Agadir Satellite Streets!</span>
     </div>
 
     <div id="viewport">
         <canvas id="gameCanvas" width="800" height="440"></canvas>
         <div id="map-container"></div>
+
+        <!-- SATELLITE HUD & ONLINE LIST -->
+        <div id="map-ui-overlay">
+            <div class="ui-section-title">🗺️ Map Tools</div>
+            <div class="map-tools">
+                <button class="map-btn active" id="tool-move">Walk/Drive</button>
+                <button class="map-btn" id="tool-draw">Draw Line</button>
+            </div>
+            <button class="map-btn" id="clear-drawings" style="margin-top: 5px; background: #c0392b;">Clear All Drawings</button>
+
+            <div class="ui-section-title" style="margin-top: 10px;">🟢 Online in Map (<span id="online-count">0</span>)</div>
+            <div id="online-players-list"></div>
+        </div>
+
+        <!-- MOBILE TOUCH CONTROLS -->
+        <div id="mobile-controls">
+            <div class="dpad">
+                <div class="dpad-btn" id="btn-up">▲</div>
+                <div class="dpad-btn" id="btn-left">◀</div>
+                <div class="dpad-btn" id="btn-down">▼</div>
+                <div class="dpad-btn" id="btn-right">▶</div>
+            </div>
+            <div class="action-pad">
+                <div class="action-btn" id="btn-sprint">SPRINT</div>
+            </div>
+        </div>
     </div>
 
     <div id="chat-container">
