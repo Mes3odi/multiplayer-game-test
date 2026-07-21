@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GitHub Firebase Multiplayer - Undertale NPC Edition</title>
+    <title>GitHub Firebase Multiplayer - Persona 5 Edition</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -49,7 +49,7 @@
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
             text-align: center;
         }
-        .setup-box h2 { margin: 0 0 5px 0; color: #2ecc71; font-size: 20px; }
+        .setup-box h2 { margin: 0 0 5px 0; color: #e74c3c; font-size: 20px; }
         .setup-box label { font-size: 12px; color: #aaa; text-align: left; }
         .setup-box input, .setup-box select {
             background: #111;
@@ -63,8 +63,8 @@
             box-sizing: border-box;
         }
         #join-btn {
-            background: #2ecc71;
-            color: #000;
+            background: #e74c3c;
+            color: #fff;
             border: none;
             padding: 10px;
             font-weight: bold;
@@ -73,7 +73,7 @@
             font-size: 14px;
             margin-top: 5px;
         }
-        #join-btn:hover { background: #27ae60; }
+        #join-btn:hover { background: #c0392b; }
         .refresh-note {
             font-size: 11px;
             color: #777;
@@ -87,17 +87,108 @@
             align-items: center;
             font-size: 13px;
             color: #aaa;
+            width: 800px;
+            justify-content: space-between;
         }
+        #p5-menu-toggle {
+            background: #e74c3c;
+            color: #fff;
+            border: none;
+            padding: 4px 12px;
+            font-weight: bold;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        #p5-menu-toggle:hover { background: #c0392b; }
 
         #viewport {
             position: relative;
             width: 800px;
             height: 440px;
             background: #1e3f20;
-            border: 3px solid #555;
-            box-shadow: 0 0 20px rgba(0,0,0,0.6);
+            border: 3px solid #e74c3c;
+            box-shadow: 0 0 25px rgba(231, 76, 60, 0.4);
+            overflow: hidden;
         }
         canvas { display: block; }
+
+        /* --- PERSONA 5 OVERLAY MENU & TRANSITION --- */
+        #p5-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-end;
+            padding-right: 80px;
+            box-sizing: border-box;
+            transform: skewX(-15deg);
+            border-left: 10px solid #e74c3c;
+        }
+        .p5-menu-content {
+            transform: skewX(15deg);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            text-align: right;
+            width: 320px;
+        }
+        .p5-title {
+            color: #e74c3c;
+            font-size: 32px;
+            font-weight: 900;
+            font-style: italic;
+            text-shadow: 3px 3px 0px #fff;
+            margin-bottom: 10px;
+            border-bottom: 4px solid #fff;
+            padding-bottom: 5px;
+        }
+        .p5-btn {
+            background: #000;
+            color: #fff;
+            border: 3px solid #e74c3c;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            font-style: italic;
+            cursor: pointer;
+            text-align: left;
+            transition: 0.1s;
+            box-shadow: 4px 4px 0px #e74c3c;
+        }
+        .p5-btn:hover {
+            background: #e74c3c;
+            color: #000;
+            box-shadow: 4px 4px 0px #fff;
+        }
+        .p5-credits {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #f1c40f;
+            font-style: italic;
+            font-weight: bold;
+            background: rgba(231, 76, 60, 0.2);
+            padding: 8px;
+            border: 1px dashed #e74c3c;
+        }
+
+        /* Persona 5 Dynamic Swipe Transition Canvas / Overlay */
+        #p5-transition-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 200;
+            display: none;
+        }
 
         /* Real-World Satellite Map Container */
         #map-container {
@@ -122,12 +213,12 @@
             background: rgba(0, 0, 0, 0.85);
             padding: 10px;
             border-radius: 6px;
-            border: 1px solid #444;
+            border: 1px solid #e74c3c;
             width: 220px;
             max-height: 420px;
             overflow-y: auto;
         }
-        .ui-section-title { font-size: 12px; font-weight: bold; color: #2ecc71; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 5px; }
+        .ui-section-title { font-size: 12px; font-weight: bold; color: #e74c3c; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 5px; }
         #online-players-list { font-size: 11px; color: #ddd; display: flex; flex-direction: column; gap: 3px; }
         
         .map-tools {
@@ -145,7 +236,7 @@
             cursor: pointer;
             text-align: center;
         }
-        .map-btn.active { background: #2ecc71; color: #000; font-weight: bold; }
+        .map-btn.active { background: #e74c3c; color: #fff; font-weight: bold; }
         .map-btn:hover { background: #444; }
 
         /* --- MOBILE CONTROLS OVERLAY --- */
@@ -193,8 +284,8 @@
         .action-btn {
             width: 55px;
             height: 55px;
-            background: rgba(46, 204, 113, 0.3);
-            border: 2px solid #2ecc71;
+            background: rgba(231, 76, 60, 0.3);
+            border: 2px solid #e74c3c;
             color: #fff;
             font-size: 11px;
             font-weight: bold;
@@ -204,7 +295,7 @@
             justify-content: center;
             user-select: none;
         }
-        .action-btn:active { background: rgba(46, 204, 113, 0.7); }
+        .action-btn:active { background: rgba(231, 76, 60, 0.7); }
 
         /* Chat Box Styling */
         #chat-container {
@@ -256,7 +347,7 @@
     <!-- PRE-JOIN SETUP SCREEN -->
     <div id="setup-overlay">
         <div class="setup-box">
-            <h2>Agadir Multiplayer</h2>
+            <h2>Agadir P5 Multiplayer</h2>
             <div>
                 <label>Your Name:</label>
                 <input type="text" id="setup-name" maxlength="12" placeholder="Enter name...">
@@ -272,23 +363,39 @@
                     <option value="mobile">Mobile (On-screen Buttons)</option>
                 </select>
             </div>
-            <button id="join-btn">JOIN GAME</button>
+            <button id="join-btn">TAKE YOUR HEART</button>
             <div class="refresh-note">Note: If something doesn't work, click <b>CTRL + F5</b> to hard refresh.</div>
         </div>
     </div>
 
     <div id="top-bar">
-        <span id="display-player-info" style="color: #2ecc71; font-weight: bold;">Player</span>
-        <span>🌀 Walk into Portal Hub to enter Agadir Satellite Streets! (Press 'E' to talk to NPCs)</span>
+        <span id="display-player-info" style="color: #e74c3c; font-weight: bold;">Player</span>
+        <span>⚡ Walk through rooms for P5 style cuts! Press 'E' for Botato.</span>
+        <button id="p5-menu-toggle">MENU</button>
     </div>
 
     <div id="viewport">
         <canvas id="gameCanvas" width="800" height="440"></canvas>
+        <canvas id="p5-transition-canvas" width="800" height="440"></canvas>
+        
+        <!-- PERSONA 5 STYLIZED MENU -->
+        <div id="p5-overlay">
+            <div class="p5-menu-content">
+                <div class="p5-title">TAKE OVER</div>
+                <button class="p5-btn" id="p5-resume">▶ RESUME GAME</button>
+                <button class="p5-btn" id="p5-restart">🔄 RESTART POSITION</button>
+                <div class="p5-credits">
+                    ⭐ CREATED BY:<br>
+                    <strong>DA BIG MES3ODII</strong>
+                </div>
+            </div>
+        </div>
+
         <div id="map-container"></div>
 
         <!-- SATELLITE HUD & ONLINE LIST -->
         <div id="map-ui-overlay">
-            <button class="map-btn" id="map-back-btn" style="background: #2980b9; font-weight: bold; margin-bottom: 5px;">🔙 Back to Rooms</button>
+            <button class="map-btn" id="map-back-btn" style="background: #e74c3c; font-weight: bold; margin-bottom: 5px;">🔙 Back to Rooms</button>
             <div class="ui-section-title">🗺️ Map Tools</div>
             <div class="map-tools">
                 <button class="map-btn active" id="tool-move">Walk/Drive</button>
