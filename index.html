@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GitHub Firebase Multiplayer - Ultimate Agadir Edition</title>
+    <title>GitHub Firebase Multiplayer - Undertale NPC Edition</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -119,12 +119,12 @@
             display: none;
             flex-direction: column;
             gap: 10px;
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.85);
             padding: 10px;
             border-radius: 6px;
             border: 1px solid #444;
             width: 220px;
-            max-height: 400px;
+            max-height: 420px;
             overflow-y: auto;
         }
         .ui-section-title { font-size: 12px; font-weight: bold; color: #2ecc71; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 5px; }
@@ -139,13 +139,14 @@
             background: #333;
             color: #fff;
             border: 1px solid #555;
-            padding: 5px;
+            padding: 6px;
             font-size: 11px;
             border-radius: 3px;
             cursor: pointer;
             text-align: center;
         }
         .map-btn.active { background: #2ecc71; color: #000; font-weight: bold; }
+        .map-btn:hover { background: #444; }
 
         /* --- MOBILE CONTROLS OVERLAY --- */
         #mobile-controls {
@@ -278,7 +279,7 @@
 
     <div id="top-bar">
         <span id="display-player-info" style="color: #2ecc71; font-weight: bold;">Player</span>
-        <span>🛰️ Walk into Portal Hub to enter Agadir Satellite Streets!</span>
+        <span>🌀 Walk into Portal Hub to enter Agadir Satellite Streets! (Press 'E' to talk to NPCs)</span>
     </div>
 
     <div id="viewport">
@@ -287,6 +288,7 @@
 
         <!-- SATELLITE HUD & ONLINE LIST -->
         <div id="map-ui-overlay">
+            <button class="map-btn" id="map-back-btn" style="background: #2980b9; font-weight: bold; margin-bottom: 5px;">🔙 Back to Rooms</button>
             <div class="ui-section-title">🗺️ Map Tools</div>
             <div class="map-tools">
                 <button class="map-btn active" id="tool-move">Walk/Drive</button>
@@ -307,7 +309,8 @@
                 <div class="dpad-btn" id="btn-right">▶</div>
             </div>
             <div class="action-pad">
-                <div class="action-btn" id="btn-sprint">SPRINT</div>
+                <div class="action-btn" id="btn-interact">E</div>
+                <div class="action-btn" id="btn-sprint">RUN</div>
             </div>
         </div>
     </div>
