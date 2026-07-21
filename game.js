@@ -18,6 +18,8 @@ const db = getDatabase(app);
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+const p5Canvas = document.getElementById("p5-transition-canvas");
+const p5Ctx = p5Canvas.getContext("2d");
 const viewport = document.getElementById("viewport");
 const mapContainer = document.getElementById("map-container");
 const setupOverlay = document.getElementById("setup-overlay");
@@ -30,6 +32,7 @@ const mobileControls = document.getElementById("mobile-controls");
 const mapUiOverlay = document.getElementById("map-ui-overlay");
 const onlinePlayersListEl = document.getElementById("online-players-list");
 const onlineCountEl = document.getElementById("online-count");
+const p5Overlay = document.getElementById("p5-overlay");
 
 setupName.value = "Player_" + Math.floor(Math.random() * 900 + 100);
 
@@ -60,9 +63,8 @@ let leafletMarkers = {};
 let drawingPolylines = {};
 let currentTool = "move";
 let currentLinePoints = [];
-
-// --- NPC SETUP (Undertale Style) ---
-let activeDialogue = null; // Holds active NPC dialogue box data
+let activeDialogue = null;
+let isTransitioning = false; // Persona 5 transition flag
 
 const npcs = {
     "room_dungeon": [
@@ -84,6 +86,56 @@ const rooms = {
     "room_python": { name: "🐍 Python Coding Lab", bg: "#2c1654" },
     "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
+
+// --- PERSONA 5 TRANSITION ANIMATION ---
+function playP5Transition(callback) {
+    isTransitioning = true;
+    p5Canvas.style.display = "block";
+    let progress = 0;
+
+    function animateCut() {
+        progress += 0.08;
+        p5Ctx.clearRect(0, 0, p5Canvas.width, p5Canvas.height);
+
+        // Dynamic angular slash bars in P5 red & black style
+        let slashWidth = p5Canvas.width * progress;
+        
+        p5Ctx.fillStyle = "#000000";
+        p5Ctx.beginPath();
+        p5Ctx.moveTo(0, 0);
+        p5Ctx.lineTo(slashWidth, 0);
+        p5Ctx.lineTo(slashWidth - 200, p5Canvas.height);
+        p5Ctx.lineTo(0, p5Canvas.height);
+        p5Ctx.fill();
+
+        p5Ctx.fillStyle = "#e74c3c";
+        p5Ctx.fillRect(slashWidth - 8, 0, 10, p5Canvas.height);
+
+        if (progress < 1.6) {
+            requestAnimationFrame(animateCut);
+        } else {
+            p5Canvas.style.display = "none";
+            isTransitioning = false;
+            if (callback) callback();
+        }
+    }
+    animateCut();
+}
+
+// Menu Controls
+document.getElementById('p5-menu-toggle').addEventListener('click', () => {
+    p5Overlay.style.display = "flex";
+});
+document.getElementById('p5-resume').addEventListener('click', () => {
+    p5Overlay.style.display = "none";
+});
+document.getElementById('p5-restart').addEventListener('click', () => {
+    myData.x = 400;
+    myData.y = 220;
+    myData.room = "room_forest";
+    p5Overlay.style.display = "none";
+    set(myPlayerRef, myData);
+});
 
 joinBtn.addEventListener('click', () => {
     let nameVal = setupName.value.trim();
@@ -143,13 +195,15 @@ function initLeafletMap() {
 
 // Back to Rooms Button from Map
 document.getElementById('map-back-btn').addEventListener('click', () => {
-    myData.room = "room_portal";
-    myData.x = 400;
-    myData.y = 220;
-    mapContainer.style.display = "none";
-    mapUiOverlay.style.display = "none";
-    canvas.style.display = "block";
-    set(myPlayerRef, myData);
+    playP5Transition(() => {
+        myData.room = "room_portal";
+        myData.x = 400;
+        myData.y = 220;
+        mapContainer.style.display = "none";
+        mapUiOverlay.style.display = "none";
+        canvas.style.display = "block";
+        set(myPlayerRef, myData);
+    });
 });
 
 document.getElementById('tool-move').addEventListener('click', () => {
@@ -179,7 +233,7 @@ onValue(drawingsRef, (snapshot) => {
     for (let id in data) {
         let lineData = data[id];
         if (lineData && lineData.points && leafletMap) {
-            let polyline = L.polyline(lineData.points, { color: lineData.color || '#2ecc71', weight: 4 }).addTo(leafletMap);
+            let polyline = L.polyline(lineData.points, { color: lineData.color || '#e74c3c', weight: 4 }).addTo(leafletMap);
             polyline.on('click', () => {
                 if (confirm("Delete this drawing line?")) {
                     remove(ref(db, 'drawings/' + id));
@@ -269,22 +323,34 @@ function updateAllMapMarkers() {
 }
 
 function checkRoomTransition() {
-    let changed = false;
+    let nextRoom = null;
+    let newX = myData.x;
+
     if (myData.x > canvas.width - myData.width) {
-        if (myData.room === "room_forest") { myData.room = "room_dungeon"; myData.x = 10; changed = true; }
-        else if (myData.room === "room_dungeon") { myData.room = "room_python"; myData.x = 10; changed = true; }
-        else if (myData.room === "room_python") { myData.room = "room_portal"; myData.x = 10; changed = true; }
+        if (myData.room === "room_forest") { nextRoom = "room_dungeon"; newX = 10; }
+        else if (myData.room === "room_dungeon") { nextRoom = "room_python"; newX = 10; }
+        else if (myData.room === "room_python") { nextRoom = "room_portal"; newX = 10; }
         else { myData.x = canvas.width - myData.width; }
     }
     else if (myData.x < 0) {
-        if (myData.room === "room_portal") { myData.room = "room_python"; myData.x = canvas.width - 40; changed = true; }
-        else if (myData.room === "room_python") { myData.room = "room_dungeon"; myData.x = canvas.width - 40; changed = true; }
-        else if (myData.room === "room_dungeon") { myData.room = "room_forest"; myData.x = canvas.width - 40; changed = true; }
+        if (myData.room === "room_portal") { nextRoom = "room_python"; newX = canvas.width - 40; }
+        else if (myData.room === "room_python") { nextRoom = "room_dungeon"; newX = canvas.width - 40; }
+        else if (myData.room === "room_dungeon") { nextRoom = "room_forest"; newX = canvas.width - 40; }
         else { myData.x = 0; }
     }
-    else if (myData.y > canvas.height - myData.height) { myData.y = canvas.height - myData.height; }
+
+    if (nextRoom && !isTransitioning) {
+        playP5Transition(() => {
+            myData.room = nextRoom;
+            myData.x = newX;
+            set(myPlayerRef, myData);
+        });
+        return true;
+    }
+
+    if (myData.y > canvas.height - myData.height) { myData.y = canvas.height - myData.height; }
     else if (myData.y < 0) { myData.y = 0; }
-    return changed;
+    return false;
 }
 
 // Python Interpreter
@@ -314,10 +380,9 @@ function evaluatePythonCode(code) {
 
 const keys = {};
 window.addEventListener("keydown", (e) => {
-    if (document.activeElement.tagName === 'INPUT') return;
+    if (document.activeElement.tagName === 'INPUT' || p5Overlay.style.display === "flex") return;
     let key = e.key.toLowerCase();
 
-    // Interaction key 'e'
     if (key === 'e') {
         checkNPCInteraction();
         return;
@@ -351,7 +416,6 @@ bindTouchButton('btn-down', 's');
 bindTouchButton('btn-right', 'd');
 bindTouchButton('btn-sprint', 'shift');
 
-// Mobile interact button
 let interactBtn = document.getElementById('btn-interact');
 if (interactBtn) {
     interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); checkNPCInteraction(); });
@@ -360,7 +424,7 @@ if (interactBtn) {
 
 function checkNPCInteraction() {
     if (activeDialogue) {
-        activeDialogue = null; // Close dialogue on next press
+        activeDialogue = null;
         return;
     }
 
@@ -425,7 +489,7 @@ onValue(chatRef, (snapshot) => {
 });
 
 function update() {
-    if (setupOverlay.style.display !== "none" || activeDialogue) return;
+    if (setupOverlay.style.display !== "none" || activeDialogue || isTransitioning || p5Overlay.style.display === "flex") return;
 
     if (myData.room === "room_portal_active") {
         if (currentTool === "draw") return;
@@ -456,19 +520,23 @@ function update() {
     if (keys['d'] || keys['arrowright']) { myData.x += speed; moved = true; }
 
     let roomChanged = checkRoomTransition();
+    if (roomChanged) return;
 
     if (myData.room === "room_portal" && myData.x > 350 && myData.x < 450 && myData.y > 180 && myData.y < 260) {
-        myData.room = "room_portal_active";
-        myData.lat = SPAWN_LAT;
-        myData.lng = SPAWN_LNG;
-        canvas.style.display = "none";
-        mapContainer.style.display = "block";
-        mapUiOverlay.style.display = "flex";
-        initLeafletMap();
-        set(myPlayerRef, myData);
+        playP5Transition(() => {
+            myData.room = "room_portal_active";
+            myData.lat = SPAWN_LAT;
+            myData.lng = SPAWN_LNG;
+            canvas.style.display = "none";
+            mapContainer.style.display = "block";
+            mapUiOverlay.style.display = "flex";
+            initLeafletMap();
+            set(myPlayerRef, myData);
+        });
+        return;
     }
 
-    if (moved || roomChanged) {
+    if (moved) {
         set(myPlayerRef, myData);
     }
 }
@@ -488,7 +556,6 @@ function draw() {
     ctx.textAlign = "left";
     ctx.fillText(currentRoomInfo.name, 20, 30);
 
-    // Render Room NPCs
     let roomNPCs = npcs[myData.room] || [];
     for (let npc of roomNPCs) {
         if (!loadedImages[npc.image]) {
@@ -510,7 +577,6 @@ function draw() {
         ctx.textAlign = "center";
         ctx.fillText(npc.name, npc.x + npc.width / 2, npc.y - 6);
 
-        // Interaction Prompt Indicator if close
         let dist = Math.hypot((myData.x + myData.width/2) - (npc.x + npc.width/2), (myData.y + myData.height/2) - (npc.y + npc.height/2));
         if (dist < 65) {
             ctx.fillStyle = "#ffffff";
@@ -522,10 +588,10 @@ function draw() {
     if (myData.room === "room_python") {
         ctx.fillStyle = "#111";
         ctx.fillRect(180, 50, 440, 220);
-        ctx.strokeStyle = "#8e44ad";
+        ctx.strokeStyle = "#e74c3c";
         ctx.lineWidth = 3;
         ctx.strokeRect(180, 50, 440, 220);
-        ctx.fillStyle = "#8e44ad";
+        ctx.fillStyle = "#e74c3c";
         ctx.fillRect(180, 50, 440, 25);
         ctx.fillStyle = "#fff";
         ctx.font = "bold 12px monospace";
@@ -583,7 +649,6 @@ function draw() {
         ctx.fillText(pName, p.x + pWidth / 2, p.y - 6);
     }
 
-    // --- UNDERTALE DIALOGUE BOX OVERLAY ---
     if (activeDialogue) {
         ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
         ctx.fillRect(50, 280, 700, 130);
@@ -591,7 +656,6 @@ function draw() {
         ctx.lineWidth = 4;
         ctx.strokeRect(50, 280, 700, 130);
 
-        // NPC Portrait Avatar
         if (activeDialogue.image) {
             if (!loadedImages[activeDialogue.image]) {
                 let img = new Image();
