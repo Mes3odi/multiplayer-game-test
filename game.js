@@ -31,11 +31,13 @@ const mapUiOverlay = document.getElementById("map-ui-overlay");
 const onlinePlayersListEl = document.getElementById("online-players-list");
 const onlineCountEl = document.getElementById("online-count");
 
-// Random default name generator
 setupName.value = "Player_" + Math.floor(Math.random() * 900 + 100);
 
 const playerId = 'player_' + Math.random().toString(36).substring(2, 9);
 const fallbackColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+
+const SPAWN_LAT = 30.4278;
+const SPAWN_LNG = -9.5981;
 
 let myData = {
     x: 400,
@@ -46,8 +48,8 @@ let myData = {
     room: "room_forest", 
     width: 32,
     height: 32,
-    lat: 30.4278,
-    lng: -9.5981
+    lat: SPAWN_LAT,
+    lng: SPAWN_LNG
 };
 
 let isMobile = false;
@@ -56,9 +58,25 @@ let loadedImages = {};
 let leafletMap = null;
 let leafletMarkers = {};
 let drawingPolylines = {};
-let currentTool = "move"; // "move" or "draw"
-let isDrawingActive = false;
+let currentTool = "move";
 let currentLinePoints = [];
+
+// --- NPC SETUP (Undertale Style) ---
+let activeDialogue = null; // Holds active NPC dialogue box data
+
+const npcs = {
+    "room_dungeon": [
+        {
+            name: "Botato",
+            x: 350,
+            y: 180,
+            width: 40,
+            height: 40,
+            image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTk5iSgpPztUgs3JHZ14RcyIsrFsAEkPuygXVd5Z8MmIA&s=10",
+            dialogue: "botato talk"
+        }
+    ]
+};
 
 const rooms = {
     "room_forest": { name: "🌳 Forest Clearing", bg: "#1e3f20" },
@@ -67,7 +85,6 @@ const rooms = {
     "room_portal": { name: "🌀 World Map Portal Hub", bg: "#0f2027" }
 };
 
-// Join Game Menu Handler
 joinBtn.addEventListener('click', () => {
     let nameVal = setupName.value.trim();
     if (nameVal) myData.name = nameVal;
@@ -106,13 +123,11 @@ function initLeafletMap() {
             maxZoom: 19
         }).addTo(leafletMap);
 
-        // Map Click handling for drawing tool
         leafletMap.on('click', (e) => {
             if (currentTool === "draw") {
                 let newPoint = [e.latlng.lat, e.latlng.lng];
                 currentLinePoints.push(newPoint);
                 if (currentLinePoints.length >= 2) {
-                    // Push permanent line to Firebase
                     push(ref(db, 'drawings'), {
                         points: currentLinePoints,
                         color: myData.color
@@ -121,10 +136,22 @@ function initLeafletMap() {
                 }
             }
         });
+    } else {
+        leafletMap.setView([myData.lat, myData.lng], 18);
     }
 }
 
-// Tool Selection Buttons
+// Back to Rooms Button from Map
+document.getElementById('map-back-btn').addEventListener('click', () => {
+    myData.room = "room_portal";
+    myData.x = 400;
+    myData.y = 220;
+    mapContainer.style.display = "none";
+    mapUiOverlay.style.display = "none";
+    canvas.style.display = "block";
+    set(myPlayerRef, myData);
+});
+
 document.getElementById('tool-move').addEventListener('click', () => {
     currentTool = "move";
     document.getElementById('tool-move').classList.add('active');
@@ -141,11 +168,9 @@ document.getElementById('clear-drawings').addEventListener('click', () => {
     }
 });
 
-// Listen to Permanent Drawings from Firebase
 const drawingsRef = ref(db, 'drawings');
 onValue(drawingsRef, (snapshot) => {
     let data = snapshot.val() || {};
-    // Clear old visual polylines
     for (let id in drawingPolylines) {
         if (leafletMap) leafletMap.removeLayer(drawingPolylines[id]);
     }
@@ -155,7 +180,6 @@ onValue(drawingsRef, (snapshot) => {
         let lineData = data[id];
         if (lineData && lineData.points && leafletMap) {
             let polyline = L.polyline(lineData.points, { color: lineData.color || '#2ecc71', weight: 4 }).addTo(leafletMap);
-            // Allow anyone to click and delete a drawing line permanently
             polyline.on('click', () => {
                 if (confirm("Delete this drawing line?")) {
                     remove(ref(db, 'drawings/' + id));
@@ -229,10 +253,13 @@ function updateAllMapMarkers() {
             iconAnchor: [30, 20]
         });
 
+        let pLat = p.lat || SPAWN_LAT;
+        let pLng = p.lng || SPAWN_LNG;
+
         if (!leafletMarkers[id]) {
-            leafletMarkers[id] = L.marker([p.lat || 30.4278, p.lng || -9.5981], { icon: customIcon }).addTo(leafletMap);
+            leafletMarkers[id] = L.marker([pLat, pLng], { icon: customIcon }).addTo(leafletMap);
         } else {
-            leafletMarkers[id].setLatLng([p.lat || 30.4278, p.lng || -9.5981]);
+            leafletMarkers[id].setLatLng([pLat, pLng]);
             leafletMarkers[id].setIcon(customIcon);
         }
     }
@@ -240,7 +267,6 @@ function updateAllMapMarkers() {
     onlineCountEl.innerText = count;
     onlinePlayersListEl.innerHTML = onlineListHTML;
 }
-// ---------------------------------------------------
 
 function checkRoomTransition() {
     let changed = false;
@@ -290,6 +316,13 @@ const keys = {};
 window.addEventListener("keydown", (e) => {
     if (document.activeElement.tagName === 'INPUT') return;
     let key = e.key.toLowerCase();
+
+    // Interaction key 'e'
+    if (key === 'e') {
+        checkNPCInteraction();
+        return;
+    }
+
     if (['w', 's', 'a', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) || e.key === 'Shift') {
         keys[e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.key === 'Shift' ? 'shift' : key] = true;
     }
@@ -303,7 +336,6 @@ window.addEventListener("keyup", (e) => {
     }
 });
 
-// Mobile On-screen Touch Button bindings
 function bindTouchButton(id, keyName) {
     let el = document.getElementById(id);
     if (!el) return;
@@ -318,6 +350,33 @@ bindTouchButton('btn-left', 'a');
 bindTouchButton('btn-down', 's');
 bindTouchButton('btn-right', 'd');
 bindTouchButton('btn-sprint', 'shift');
+
+// Mobile interact button
+let interactBtn = document.getElementById('btn-interact');
+if (interactBtn) {
+    interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); checkNPCInteraction(); });
+    interactBtn.addEventListener('mousedown', (e) => { checkNPCInteraction(); });
+}
+
+function checkNPCInteraction() {
+    if (activeDialogue) {
+        activeDialogue = null; // Close dialogue on next press
+        return;
+    }
+
+    let roomNPCs = npcs[myData.room] || [];
+    for (let npc of roomNPCs) {
+        let dist = Math.hypot((myData.x + myData.width/2) - (npc.x + npc.width/2), (myData.y + myData.height/2) - (npc.y + npc.height/2));
+        if (dist < 65) {
+            activeDialogue = {
+                name: npc.name,
+                text: npc.dialogue,
+                image: npc.image
+            };
+            break;
+        }
+    }
+}
 
 const myPlayerRef = ref(db, 'players/' + playerId);
 onDisconnect(myPlayerRef).remove();
@@ -366,10 +425,10 @@ onValue(chatRef, (snapshot) => {
 });
 
 function update() {
-    if (setupOverlay.style.display !== "none") return;
+    if (setupOverlay.style.display !== "none" || activeDialogue) return;
 
     if (myData.room === "room_portal_active") {
-        if (currentTool === "draw") return; // disable movement while drawing
+        if (currentTool === "draw") return;
 
         let baseStep = 0.00008;
         let sprintMultiplier = keys['shift'] ? 2.5 : 1.0;
@@ -398,9 +457,10 @@ function update() {
 
     let roomChanged = checkRoomTransition();
 
-    // Portal activation check in Portal Hub room
     if (myData.room === "room_portal" && myData.x > 350 && myData.x < 450 && myData.y > 180 && myData.y < 260) {
         myData.room = "room_portal_active";
+        myData.lat = SPAWN_LAT;
+        myData.lng = SPAWN_LNG;
         canvas.style.display = "none";
         mapContainer.style.display = "block";
         mapUiOverlay.style.display = "flex";
@@ -427,6 +487,37 @@ function draw() {
     ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(currentRoomInfo.name, 20, 30);
+
+    // Render Room NPCs
+    let roomNPCs = npcs[myData.room] || [];
+    for (let npc of roomNPCs) {
+        if (!loadedImages[npc.image]) {
+            let img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = npc.image;
+            loadedImages[npc.image] = img;
+        }
+        let imgObj = loadedImages[npc.image];
+        if (imgObj.complete && imgObj.naturalWidth !== 0) {
+            ctx.drawImage(imgObj, npc.x, npc.y, npc.width, npc.height);
+        } else {
+            ctx.fillStyle = "#e67e22";
+            ctx.fillRect(npc.x, npc.y, npc.width, npc.height);
+        }
+
+        ctx.fillStyle = "#f1c40f";
+        ctx.font = "bold 11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(npc.name, npc.x + npc.width / 2, npc.y - 6);
+
+        // Interaction Prompt Indicator if close
+        let dist = Math.hypot((myData.x + myData.width/2) - (npc.x + npc.width/2), (myData.y + myData.height/2) - (npc.y + npc.height/2));
+        if (dist < 65) {
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 10px sans-serif";
+            ctx.fillText("[Press E]", npc.x + npc.width / 2, npc.y - 20);
+        }
+    }
 
     if (myData.room === "room_python") {
         ctx.fillStyle = "#111";
@@ -490,6 +581,44 @@ function draw() {
         ctx.font = "11px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(pName, p.x + pWidth / 2, p.y - 6);
+    }
+
+    // --- UNDERTALE DIALOGUE BOX OVERLAY ---
+    if (activeDialogue) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+        ctx.fillRect(50, 280, 700, 130);
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(50, 280, 700, 130);
+
+        // NPC Portrait Avatar
+        if (activeDialogue.image) {
+            if (!loadedImages[activeDialogue.image]) {
+                let img = new Image();
+                img.crossOrigin = "anonymous";
+                img.src = activeDialogue.image;
+                loadedImages[activeDialogue.image] = img;
+            }
+            let imgObj = loadedImages[activeDialogue.image];
+            if (imgObj.complete && imgObj.naturalWidth !== 0) {
+                ctx.drawImage(imgObj, 75, 305, 80, 80);
+                ctx.strokeStyle = "#ffffff";
+                ctx.strokeRect(75, 305, 80, 80);
+            }
+        }
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 16px monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(activeDialogue.name + ":", 175, 315);
+
+        ctx.font = "15px monospace";
+        ctx.fillStyle = "#f1c40f";
+        ctx.fillText(activeDialogue.text, 175, 345);
+
+        ctx.font = "11px sans-serif";
+        ctx.fillStyle = "#aaa";
+        ctx.fillText("[Press E or Click to continue]", 580, 395);
     }
 }
 
