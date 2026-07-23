@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GitHub Firebase Multiplayer - Persona 5 Edition</title>
+    <title>GitHub Firebase Multiplayer - Ultimate P5 Arcade Edition</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -178,7 +178,6 @@
             border: 1px dashed #e74c3c;
         }
 
-        /* Persona 5 Dynamic Swipe Transition Canvas / Overlay */
         #p5-transition-canvas {
             position: absolute;
             top: 0;
@@ -190,7 +189,6 @@
             display: none;
         }
 
-        /* Real-World Satellite Map Container */
         #map-container {
             position: absolute;
             top: 0;
@@ -201,7 +199,6 @@
             z-index: 10;
         }
 
-        /* --- UI OVERLAYS FOR SATELLITE MAP --- */
         #map-ui-overlay {
             position: absolute;
             top: 10px;
@@ -221,10 +218,7 @@
         .ui-section-title { font-size: 12px; font-weight: bold; color: #e74c3c; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 5px; }
         #online-players-list { font-size: 11px; color: #ddd; display: flex; flex-direction: column; gap: 3px; }
         
-        .map-tools {
-            display: flex;
-            gap: 5px;
-        }
+        .map-tools { display: flex; gap: 5px; }
         .map-btn {
             flex: 1;
             background: #333;
@@ -276,11 +270,7 @@
         #btn-down { grid-column: 2; grid-row: 2; }
         #btn-right { grid-column: 3; grid-row: 2; }
 
-        .action-pad {
-            display: flex;
-            gap: 10px;
-            pointer-events: auto;
-        }
+        .action-pad { display: flex; gap: 10px; pointer-events: auto; }
         .action-btn {
             width: 55px;
             height: 55px;
@@ -318,10 +308,7 @@
             flex-direction: column;
             gap: 3px;
         }
-        #chat-form {
-            display: flex;
-            border-top: 1px solid #444;
-        }
+        #chat-form { display: flex; border-top: 1px solid #444; }
         #chat-input {
             flex: 1;
             background: #111;
@@ -347,7 +334,7 @@
     <!-- PRE-JOIN SETUP SCREEN -->
     <div id="setup-overlay">
         <div class="setup-box">
-            <h2>Agadir P5 Multiplayer</h2>
+            <h2>Mes3odi P5 Arcade</h2>
             <div>
                 <label>Your Name:</label>
                 <input type="text" id="setup-name" maxlength="12" placeholder="Enter name...">
@@ -364,13 +351,13 @@
                 </select>
             </div>
             <button id="join-btn">TAKE YOUR HEART</button>
-            <div class="refresh-note">Note: If something doesn't work, click <b>CTRL + F5</b> to hard refresh.</div>
+            <div class="refresh-note">Note: Hard refresh with <b>CTRL + F5</b> if anything jams.</div>
         </div>
     </div>
 
     <div id="top-bar">
         <span id="display-player-info" style="color: #e74c3c; font-weight: bold;">Player</span>
-        <span>⚡ Walk through rooms for P5 style cuts! Press 'E' for Botato.</span>
+        <span id="display-score" style="color: #f1c40f; font-weight: bold;">⭐ Points: 0 | 🎰 777s: 0</span>
         <button id="p5-menu-toggle">MENU</button>
     </div>
 
@@ -393,7 +380,6 @@
 
         <div id="map-container"></div>
 
-        <!-- SATELLITE HUD & ONLINE LIST -->
         <div id="map-ui-overlay">
             <button class="map-btn" id="map-back-btn" style="background: #e74c3c; font-weight: bold; margin-bottom: 5px;">🔙 Back to Rooms</button>
             <div class="ui-section-title">🗺️ Map Tools</div>
@@ -432,7 +418,6 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Load Game Script as a Module -->
     <script type="module" src="game.js"></script>
 </body>
 </html>
