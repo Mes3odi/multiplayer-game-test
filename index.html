@@ -2,422 +2,402 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GitHub Firebase Multiplayer - Ultimate P5 Arcade Edition</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Persona Grid World</title>
     <style>
-        html, body {
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            width: 100%;
+        }
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             height: 100vh;
-            background: #111;
-            color: #fff;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
             overflow: hidden;
-            touch-action: none;
         }
-
-        /* --- PRE-JOIN MENU OVERLAY --- */
-        #setup-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(10, 10, 10, 0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-        .setup-box {
-            background: #1a1a1a;
-            border: 2px solid #444;
-            padding: 25px;
-            border-radius: 8px;
-            width: 320px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            text-align: center;
-        }
-        .setup-box h2 { margin: 0 0 5px 0; color: #e74c3c; font-size: 20px; }
-        .setup-box label { font-size: 12px; color: #aaa; text-align: left; }
-        .setup-box input, .setup-box select {
-            background: #111;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 8px;
-            border-radius: 4px;
-            font-size: 14px;
-            outline: none;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        #join-btn {
-            background: #e74c3c;
-            color: #fff;
-            border: none;
-            padding: 10px;
-            font-weight: bold;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 5px;
-        }
-        #join-btn:hover { background: #c0392b; }
-        .refresh-note {
-            font-size: 11px;
-            color: #777;
-            margin-top: 10px;
-        }
-
-        #top-bar {
-            margin-bottom: 6px;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            font-size: 13px;
-            color: #aaa;
-            width: 800px;
-            justify-content: space-between;
-        }
-        #p5-menu-toggle {
-            background: #e74c3c;
-            color: #fff;
-            border: none;
-            padding: 4px 12px;
-            font-weight: bold;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        #p5-menu-toggle:hover { background: #c0392b; }
-
-        #viewport {
+        #game-container {
             position: relative;
             width: 800px;
-            height: 440px;
-            background: #1e3f20;
-            border: 3px solid #e74c3c;
-            box-shadow: 0 0 25px rgba(231, 76, 60, 0.4);
+            height: 600px;
+            background-color: #1e1e1e;
+            border: 4px solid #333333;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
             overflow: hidden;
         }
-        canvas { display: block; }
-
-        /* --- PERSONA 5 OVERLAY MENU & TRANSITION --- */
-        #p5-overlay {
+        canvas {
+            display: block;
+            background: #222;
+        }
+        /* Clean UI Panels (No Red Borders) */
+        .ui-panel {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            z-index: 100;
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: flex-end;
-            padding-right: 80px;
-            box-sizing: border-box;
-            transform: skewX(-15deg);
-            border-left: 10px solid #e74c3c;
-        }
-        .p5-menu-content {
-            transform: skewX(15deg);
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            text-align: right;
-            width: 320px;
-        }
-        .p5-title {
-            color: #e74c3c;
-            font-size: 32px;
-            font-weight: 900;
-            font-style: italic;
-            text-shadow: 3px 3px 0px #fff;
-            margin-bottom: 10px;
-            border-bottom: 4px solid #fff;
-            padding-bottom: 5px;
-        }
-        .p5-btn {
-            background: #000;
-            color: #fff;
-            border: 3px solid #e74c3c;
-            padding: 12px 20px;
-            font-size: 18px;
-            font-weight: bold;
-            font-style: italic;
-            cursor: pointer;
-            text-align: left;
-            transition: 0.1s;
-            box-shadow: 4px 4px 0px #e74c3c;
-        }
-        .p5-btn:hover {
-            background: #e74c3c;
-            color: #000;
-            box-shadow: 4px 4px 0px #fff;
-        }
-        .p5-credits {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #f1c40f;
-            font-style: italic;
-            font-weight: bold;
-            background: rgba(231, 76, 60, 0.2);
-            padding: 8px;
-            border: 1px dashed #e74c3c;
-        }
-
-        #p5-transition-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 200;
-            display: none;
-        }
-
-        #map-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            z-index: 10;
-        }
-
-        #map-ui-overlay {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 20;
-            display: none;
-            flex-direction: column;
-            gap: 10px;
-            background: rgba(0, 0, 0, 0.85);
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #e74c3c;
-            width: 220px;
-            max-height: 420px;
-            overflow-y: auto;
-        }
-        .ui-section-title { font-size: 12px; font-weight: bold; color: #e74c3c; border-bottom: 1px solid #444; padding-bottom: 3px; margin-bottom: 5px; }
-        #online-players-list { font-size: 11px; color: #ddd; display: flex; flex-direction: column; gap: 3px; }
-        
-        .map-tools { display: flex; gap: 5px; }
-        .map-btn {
-            flex: 1;
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            padding: 6px;
-            font-size: 11px;
-            border-radius: 3px;
-            cursor: pointer;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 25, 0.95);
+            border: 2px solid #555555;
+            padding: 25px;
+            border-radius: 8px;
+            width: 350px;
             text-align: center;
-        }
-        .map-btn.active { background: #e74c3c; color: #fff; font-weight: bold; }
-        .map-btn:hover { background: #444; }
-
-        /* --- MOBILE CONTROLS OVERLAY --- */
-        #mobile-controls {
-            position: absolute;
-            bottom: 15px;
-            left: 15px;
-            right: 15px;
             display: none;
-            justify-content: space-between;
-            align-items: flex-end;
-            z-index: 30;
-            pointer-events: none;
+            z-index: 50;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.8);
         }
-        .dpad {
-            display: grid;
-            grid-template-columns: repeat(3, 45px);
-            grid-template-rows: repeat(2, 45px);
-            gap: 4px;
-            pointer-events: auto;
+        .ui-panel h3 {
+            margin-bottom: 15px;
+            color: #00ffff;
+            font-size: 22px;
         }
-        .dpad-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            color: #fff;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
+        .ui-panel p {
+            margin-bottom: 20px;
+            color: #ccc;
+            font-size: 14px;
         }
-        .dpad-btn:active { background: rgba(255, 255, 255, 0.5); }
-        #btn-up { grid-column: 2; grid-row: 1; }
-        #btn-left { grid-column: 1; grid-row: 2; }
-        #btn-down { grid-column: 2; grid-row: 2; }
-        #btn-right { grid-column: 3; grid-row: 2; }
-
-        .action-pad { display: flex; gap: 10px; pointer-events: auto; }
-        .action-btn {
-            width: 55px;
-            height: 55px;
-            background: rgba(231, 76, 60, 0.3);
-            border: 2px solid #e74c3c;
-            color: #fff;
-            font-size: 11px;
-            font-weight: bold;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
-        }
-        .action-btn:active { background: rgba(231, 76, 60, 0.7); }
-
-        /* Chat Box Styling */
-        #chat-container {
-            width: 800px;
-            margin-top: 8px;
-            background: #1a1a1a;
-            border: 2px solid #444;
-            border-radius: 4px;
-            display: flex;
-            flex-direction: column;
-            height: 100px;
-        }
-        #chat-messages {
-            flex: 1;
-            padding: 6px 8px;
-            overflow-y: auto;
-            font-size: 12px;
-            color: #ddd;
-            display: flex;
-            flex-direction: column;
-            gap: 3px;
-        }
-        #chat-form { display: flex; border-top: 1px solid #444; }
-        #chat-input {
-            flex: 1;
-            background: #111;
-            border: none;
-            padding: 6px 8px;
-            color: #fff;
-            font-size: 12px;
-            outline: none;
-        }
-        #chat-send {
-            background: #444;
-            color: #fff;
-            border: none;
-            padding: 0 14px;
+        .ui-panel button {
+            background: #2a2a35;
+            color: white;
+            border: 1px solid #777;
+            padding: 8px 16px;
+            margin: 5px;
             cursor: pointer;
-            font-weight: bold;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.2s;
         }
-        #chat-send:hover { background: #555; }
+        .ui-panel button:hover {
+            background: #00ffff;
+            color: #000;
+        }
+
+        /* Persona-style Wipe Transition Overlay */
+        #transition-overlay {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: #000000;
+            z-index: 100;
+            pointer-events: none;
+            transition: left 0.35s cubic-bezier(0.77, 0, 0.175, 1);
+        }
+        #transition-overlay.active {
+            left: 0;
+        }
+        #transition-overlay.slide-out {
+            left: 100%;
+        }
     </style>
 </head>
 <body>
 
-    <!-- PRE-JOIN SETUP SCREEN -->
-    <div id="setup-overlay">
-        <div class="setup-box">
-            <h2>Mes3odi P5 Arcade</h2>
-            <div>
-                <label>Your Name:</label>
-                <input type="text" id="setup-name" maxlength="12" placeholder="Enter name...">
-            </div>
-            <div>
-                <label>Avatar Image URL (Optional):</label>
-                <input type="text" id="setup-image" placeholder="https://... (or leave blank)">
-            </div>
-            <div>
-                <label>Device Type:</label>
-                <select id="setup-device">
-                    <option value="pc">PC (Keyboard / WASD)</option>
-                    <option value="mobile">Mobile (On-screen Buttons)</option>
-                </select>
-            </div>
-            <button id="join-btn">TAKE YOUR HEART</button>
-            <div class="refresh-note">Note: Hard refresh with <b>CTRL + F5</b> if anything jams.</div>
-        </div>
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <!-- Python Terminal UI -->
+    <div id="python-ui" class="ui-panel">
+        <h3>Python Terminal</h3>
+        <p>Run script diagnostics to optimize system data.</p>
+        <button onclick="runPythonCode()">Execute Script (+50 pts)</button>
+        <button onclick="closeUI()">Close</button>
     </div>
 
-    <div id="top-bar">
-        <span id="display-player-info" style="color: #e74c3c; font-weight: bold;">Player</span>
-        <span id="display-score" style="color: #f1c40f; font-weight: bold;">⭐ Points: 0 | 🎰 777s: 0</span>
-        <button id="p5-menu-toggle">MENU</button>
+    <!-- Gambling Machine UI -->
+    <div id="gambling-ui" class="ui-panel">
+        <h3>Gambling Machine</h3>
+        <p>Test your fortune! Cost: 10 points.</p>
+        <button onclick="spinMachine()">Spin Reels</button>
+        <button onclick="closeUI()">Close</button>
     </div>
 
-    <div id="viewport">
-        <canvas id="gameCanvas" width="800" height="440"></canvas>
-        <canvas id="p5-transition-canvas" width="800" height="440"></canvas>
+    <!-- Portal UI / Prompt -->
+    <div id="portal-ui" class="ui-panel">
+        <h3>Dimensional Portal</h3>
+        <p>A swirling vortex of energy. Activate to warp back to Hub?</p>
+        <button onclick="usePortal()">Step Through</button>
+        <button onclick="closeUI()">Close</button>
+    </div>
+
+    <div id="transition-overlay"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+/* 
+  Room Map Layout Structure:
+          [Puzzles Room]
+                ^
+                |
+  [Scoreboard] <-> [Gambling Room]
+                         ^
+                         |
+                   [Central Hub] <---> [Portal Room]
+                         |
+                         v
+                    [Python Room]
+*/
+
+const rooms = {
+    hub: { 
+        name: "Central Hub", 
+        bg: "#16161a", 
+        up: "gambling", 
+        down: "python", 
+        left: "portal" 
+    },
+    portal: { 
+        name: "Portal Room", 
+        bg: "#0f172a", 
+        right: "hub" 
+    },
+    python: { 
+        name: "Python Board Room", 
+        bg: "#1e1b4b", 
+        up: "hub" 
+    },
+    gambling: { 
+        name: "Gambling Room", 
+        bg: "#2e1065", 
+        down: "hub", 
+        up: "puzzles", 
+        left: "scoreboard" 
+    },
+    puzzles: { 
+        name: "Puzzle Room", 
+        bg: "#4c0519", 
+        down: "gambling" 
+    },
+    scoreboard: { 
+        name: "Scoreboard Room", 
+        bg: "#064e3b", 
+        right: "gambling" 
+    }
+};
+
+let currentRoomKey = 'hub';
+
+// Player Object
+let player = {
+    x: 400,
+    y: 300,
+    size: 26,
+    speed: 4.5,
+    color: '#00ffff',
+    points: 120
+};
+
+// Input State
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.key] = true;
+    if (e.key === 'e' || e.key === 'E') {
+        checkInteractions();
+    }
+});
+window.addEventListener('keyup', e => keys[e.key] = false);
+
+let activeUI = null;
+let transitionActive = false;
+
+function changeRoom(newRoomKey, entrySide) {
+    if (transitionActive) return;
+    transitionActive = true;
+    
+    const overlay = document.getElementById('transition-overlay');
+    overlay.className = 'active';
+
+    setTimeout(() => {
+        currentRoomKey = newRoomKey;
+        closeUI();
         
-        <!-- PERSONA 5 STYLIZED MENU -->
-        <div id="p5-overlay">
-            <div class="p5-menu-content">
-                <div class="p5-title">TAKE OVER</div>
-                <button class="p5-btn" id="p5-resume">▶ RESUME GAME</button>
-                <button class="p5-btn" id="p5-restart">🔄 RESTART POSITION</button>
-                <div class="p5-credits">
-                    ⭐ CREATED BY:<br>
-                    <strong>DA BIG MES3ODII</strong>
-                </div>
-            </div>
-        </div>
+        // Seamless positioning based on entry direction
+        if (entrySide === 'left') {
+            player.x = 40; player.y = 300;
+        } else if (entrySide === 'right') {
+            player.x = canvas.width - 40; player.y = 300;
+        } else if (entrySide === 'up') {
+            player.x = 400; player.y = canvas.height - 40;
+        } else if (entrySide === 'down') {
+            player.x = 400; player.y = 40;
+        } else {
+            player.x = 400; player.y = 300;
+        }
 
-        <div id="map-container"></div>
+        overlay.className = 'slide-out';
+        setTimeout(() => {
+            overlay.className = '';
+            transitionActive = false;
+        }, 350);
+    }, 350);
+}
 
-        <div id="map-ui-overlay">
-            <button class="map-btn" id="map-back-btn" style="background: #e74c3c; font-weight: bold; margin-bottom: 5px;">🔙 Back to Rooms</button>
-            <div class="ui-section-title">🗺️ Map Tools</div>
-            <div class="map-tools">
-                <button class="map-btn active" id="tool-move">Walk/Drive</button>
-                <button class="map-btn" id="tool-draw">Draw Line</button>
-            </div>
-            <button class="map-btn" id="clear-drawings" style="margin-top: 5px; background: #c0392b;">Clear All Drawings</button>
+// Room Interaction Triggers
+function checkInteractions() {
+    if (activeUI) return;
+    
+    const distToObj = (ox, oy) => Math.hypot(player.x - ox, player.y - oy);
 
-            <div class="ui-section-title" style="margin-top: 10px;">🟢 Online in Map (<span id="online-count">0</span>)</div>
-            <div id="online-players-list"></div>
-        </div>
+    if (currentRoomKey === 'python' && distToObj(400, 180) < 70) {
+        document.getElementById('python-ui').style.display = 'block';
+        activeUI = 'python';
+    } else if (currentRoomKey === 'gambling' && distToObj(400, 180) < 70) {
+        document.getElementById('gambling-ui').style.display = 'block';
+        activeUI = 'gambling';
+    } else if (currentRoomKey === 'portal' && distToObj(400, 300) < 80) {
+        document.getElementById('portal-ui').style.display = 'block';
+        activeUI = 'portal';
+    }
+}
 
-        <!-- MOBILE TOUCH CONTROLS -->
-        <div id="mobile-controls">
-            <div class="dpad">
-                <div class="dpad-btn" id="btn-up">▲</div>
-                <div class="dpad-btn" id="btn-left">◀</div>
-                <div class="dpad-btn" id="btn-down">▼</div>
-                <div class="dpad-btn" id="btn-right">▶</div>
-            </div>
-            <div class="action-pad">
-                <div class="action-btn" id="btn-interact">E</div>
-                <div class="action-btn" id="btn-sprint">RUN</div>
-            </div>
-        </div>
-    </div>
+function closeUI() {
+    document.querySelectorAll('.ui-panel').forEach(p => p.style.display = 'none');
+    activeUI = null;
+}
 
-    <div id="chat-container">
-        <div id="chat-messages"></div>
-        <form id="chat-form">
-            <input type="text" id="chat-input" placeholder="Type a chat message or Python code..." autocomplete="off">
-            <button type="submit" id="chat-send">Send</button>
-        </form>
-    </div>
+function runPythonCode() {
+    player.points += 50;
+    alert("Python Script Compiled Successfully! +50 Points.");
+    closeUI();
+}
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script type="module" src="game.js"></script>
+function spinMachine() {
+    if (player.points < 10) {
+        alert("Insufficient points! Earn more via Python or Puzzles.");
+        return;
+    }
+    player.points -= 10;
+    const won = Math.random() > 0.4;
+    if (won) {
+        player.points += 40;
+        alert("JACKPOT! Won 40 points!");
+    } else {
+        alert("No luck this spin. Try again!");
+    }
+}
+
+function usePortal() {
+    changeRoom('hub', 'right');
+}
+
+// Main Update Loop
+function update() {
+    if (!transitionActive && !activeUI) {
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) player.y -= player.speed;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) player.y += player.speed;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.x -= player.speed;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) player.x += player.speed;
+
+        // Room boundary transitions
+        const room = rooms[currentRoomKey];
+        if (player.x < 0) {
+            if (room.left) changeRoom(room.left, 'right');
+            else player.x = 0;
+        }
+        if (player.x > canvas.width) {
+            if (room.right) changeRoom(room.right, 'left');
+            else player.x = canvas.width;
+        }
+        if (player.y < 0) {
+            if (room.up) changeRoom(room.up, 'down');
+            else player.y = 0;
+        }
+        if (player.y > canvas.height) {
+            if (room.down) changeRoom(room.down, 'up');
+            else player.y = canvas.height;
+        }
+    }
+}
+
+// Draw Loop
+function draw() {
+    const room = rooms[currentRoomKey];
+    ctx.fillStyle = room.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Room-specific interactive objects & props
+    if (currentRoomKey === 'hub') {
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(360, 260, 80, 80);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '15px sans-serif';
+        ctx.fillText("Central Terminal Hub", 330, 240);
+    } 
+    else if (currentRoomKey === 'python') {
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillRect(330, 140, 140, 70);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px sans-serif';
+        ctx.fillText("Python Board [Press E]", 315, 120);
+    } 
+    else if (currentRoomKey === 'gambling') {
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillRect(330, 140, 140, 70);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px sans-serif';
+        ctx.fillText("Gambling Machine [Press E]", 295, 120);
+    } 
+    else if (currentRoomKey === 'puzzles') {
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(360, 150, 80, 80);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px sans-serif';
+        ctx.fillText("Puzzle Cipher Terminal", 315, 130);
+    } 
+    else if (currentRoomKey === 'scoreboard') {
+        // Scoreboard Room Panel & Display
+        ctx.fillStyle = '#065f46';
+        ctx.fillRect(200, 120, 400, 280);
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(200, 120, 400, 280);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText("LEADERBOARD & STATS", 270, 170);
+        
+        ctx.font = '18px sans-serif';
+        ctx.fillText(`Player Profile: Active`, 240, 230);
+        ctx.fillText(`Total Points: ${player.points}`, 240, 270);
+        ctx.fillText(`Current Zone: ${room.name}`, 240, 310);
+    } 
+    else if (currentRoomKey === 'portal') {
+        ctx.fillStyle = '#8b5cf6';
+        ctx.beginPath();
+        ctx.arc(400, 300, 60, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#c4b5fd';
+        ctx.beginPath();
+        ctx.arc(400, 300, 40, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px sans-serif';
+        ctx.fillText("Dimensional Portal [Press E]", 305, 220);
+    }
+
+    // Always render player cleanly across all rooms
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
 </body>
 </html>
